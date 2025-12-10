@@ -28,9 +28,11 @@ namespace PlinkoPrototype
         [SerializeField] private int initialBallCount = 200;
 
         [Header("Spawn Settings")]
-        [SerializeField] private Transform spawnPoint; // Eskiden sabit nokta
+        [SerializeField] private Transform spawnPoint;
         [SerializeField] private float spawnForce = 2f;
         [SerializeField] private float spawnInterval = 0.1f;
+
+        [SerializeField] private float spawnYOffset = 1f;
 
         private Vector2 spawnMin;
         private Vector2 spawnMax;
@@ -106,6 +108,8 @@ namespace PlinkoPrototype
             ball.gameObject.SetActive(true);
 
             ball.rb.velocity = Vector2.zero;
+            ball.rb.angularVelocity = 0f;
+            ball.transform.rotation = Quaternion.identity;
 
             // Random yatay kuvvet
             float randomForceX = Random.Range(-sideForce, sideForce);
@@ -172,11 +176,6 @@ namespace PlinkoPrototype
         #endregion
 
         #region Spawn Area Update
-
-        /// <summary>
-        /// LevelManager’dan gelen en üst satır peglerine göre spawn alanını ayarlar
-        /// </summary>
-        /// <param name="topRow">En üst satır peg pozisyonları</param>
         private void UpdateSpawnAreaFromLevel(List<Vector2> topRow)
         {
             if (topRow == null || topRow.Count < 2)
@@ -185,11 +184,33 @@ namespace PlinkoPrototype
                 return;
             }
 
-            // En soldaki ve sağdaki pegler arası
-            spawnMin = new Vector2(topRow[0].x, topRow[0].y);
-            spawnMax = new Vector2(topRow[topRow.Count - 1].x, topRow[0].y); // Y sabit
+            // X aralığı peg'lerden gelsin
+            float minX = topRow[0].x;
+            float maxX = topRow[topRow.Count - 1].x;
 
-            Debug.Log($"[BallManager] Spawn Area Updated: {spawnMin.x} → {spawnMax.x} at Y={spawnMin.y}");
+            // Y'yi spawnPoint'ten al; yoksa fallback olarak topRow Y'si
+            float y;
+
+            if (spawnPoint != null)
+                y = spawnPoint.position.y + spawnYOffset;
+            else
+                y = topRow[0].y; // Eski davranış
+
+            spawnMin = new Vector2(minX, y);
+            spawnMax = new Vector2(maxX, y);
+
+            Debug.Log($"[BallManager] Spawn Area Updated: {spawnMin.x} → {spawnMax.x} at Y={y}");
+        }
+
+
+        #endregion
+
+        #region AddBall
+
+        public void AddBalls(int amount)
+        {
+            availableBalls += amount;
+            GameManager.Instance.UpdateBallUI();
         }
 
         #endregion

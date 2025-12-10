@@ -19,8 +19,8 @@ public class Bucket : MonoBehaviour
         bucketSprite.transform.localScale = spriteScale;
 
         // --- Sol/Sağ edge pozisyonları ---
-        leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.position.y, 0f);
-        rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.position.y, 0f);
+        leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.localPosition.y, 0f);
+        rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.localPosition.y, 0f);
     }
 
     public void SetScore(int score)

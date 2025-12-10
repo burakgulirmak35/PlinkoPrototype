@@ -28,14 +28,13 @@ namespace PlinkoPrototype
 
         [Header("Bucket Settings")]
         [SerializeField] private int bucketCount = 5;
-        [SerializeField] private GameObject bucketPrefab;
+        [SerializeField] private Bucket bucketPrefab;
         [SerializeField] private float bucketHeight = 0.5f;
         [SerializeField] private List<Bucket> bucketList = new List<Bucket>();
 
         [Header("Peg Settings")]
         [SerializeField] private GameObject pegPrefab;
         [SerializeField] private float pegVerticalSpacing = 1f;
-        [SerializeField] private float pegRadius = 0.12f;
         [SerializeField] private List<Transform> pegList = new List<Transform>();
 
         [Header("Spawn Settings")]
@@ -95,18 +94,14 @@ namespace PlinkoPrototype
             {
                 float centerX = bucketEdges[i] + bucketWidth * 0.5f;
 
-                GameObject bucketObj = Instantiate(bucketPrefab, bucketParent);
+                Bucket bucketObj = Instantiate(bucketPrefab, bucketParent);
                 bucketObj.transform.position = new Vector3(centerX, bottomY, 0f); // pivot bottom-center
 
                 var bucketComp = bucketObj.GetComponent<Bucket>();
                 if (bucketComp != null)
                 {
-                    // Genişliği Bucket scripti ayarlayacak (9-sliced Sprite + left/right walls vs.)
                     bucketComp.SetWidth(bucketWidth);
-
-                    // Şimdilik skor 0, ileride level datasından besleyebilirsin
                     bucketComp.SetScore(0);
-
                     bucketList.Add(bucketComp);
                 }
             }
@@ -161,7 +156,6 @@ namespace PlinkoPrototype
                 {
                     GameObject peg = Instantiate(pegPrefab, pegParent);
                     peg.transform.position = pos;
-                    peg.transform.localScale = Vector3.one * pegRadius * 2f;
                     pegList.Add(peg.transform);
                 }
             }
