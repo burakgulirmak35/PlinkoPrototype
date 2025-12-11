@@ -47,7 +47,7 @@ public class GameManager : MonoBehaviour
     {
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
-        txtScore.gameObject.SetActive(false);
+        txtScore.gameObject.SetActive(true);
 
         txtPressToStart.text = "Tap to Start";
         txtHoldToSendBalls.text = "Hold to Send Balls";
@@ -119,8 +119,7 @@ public class GameManager : MonoBehaviour
 
     private void UpdateScoreUI()
     {
-        if (txtScore != null)
-            txtScore.text = "Score: " + currentScore.ToString();
+        txtScore.text = "Score: " + currentScore.ToString();
     }
 
     private void HandleBallCountChanged(int count)
