@@ -1,0 +1,20 @@
+{
+  "id": 12,
+  "bucketCount": 13,
+  "ballCount": 65,
+  "buckets": [
+    { "score": 500, "color": "#7F0000" },
+    { "score": 340, "color": "#C62828" },
+    { "score": 240, "color": "#E64A19" },
+    { "score": 160, "color": "#FB8C00" },
+    { "score": 100, "color": "#FDD835" },
+    { "score": 60,  "color": "#42A5F5" },
+    { "score": 30,  "color": "#81D4FA" },
+    { "score": 60,  "color": "#42A5F5" },
+    { "score": 100, "color": "#FDD835" },
+    { "score": 160, "color": "#FB8C00" },
+    { "score": 240, "color": "#E64A19" },
+    { "score": 340, "color": "#C62828" },
+    { "score": 500, "color": "#7F0000" }
+  ]
+}

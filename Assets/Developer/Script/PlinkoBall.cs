@@ -1,4 +1,5 @@
 using UnityEngine;
+using PlinkoPrototype;
 
 namespace PlinkoPrototype
 {
@@ -24,11 +25,12 @@ namespace PlinkoPrototype
 
             if (collision.CompareTag("Bucket"))
             {
-                tempBucket = collision.GetComponent<Bucket>();
+                tempBucket = collision.transform.parent.GetComponent<Bucket>();
                 if (tempBucket != null)
                 {
                     hasScored = true;
                     GameEvents.TriggerBallScored(tempBucket.bucketScore);
+                    Debug.Log($"Ball scored {tempBucket.bucketScore} points.");
                     tempBucket = null;
                 }
                 BallManager.Instance.ReturnBall(this);

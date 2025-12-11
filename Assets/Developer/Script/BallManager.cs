@@ -20,47 +20,68 @@ namespace PlinkoPrototype
         }
         #endregion
 
-        #region Settings
-
         [Header("Ball Settings")]
         [SerializeField] private GameObject ballPrefab;
         [SerializeField] private Transform ballPoolParent;
 
-        // Oyuncunun toplam top hakkı
         [SerializeField] private int initialBallCount = 200;
-
-        // Başta pool'a eklenecek top sayısı (aynı anda sahnede olabilecek max civarı)
         [SerializeField] private int poolSize = 50;
-
-
         [Header("Spawn Settings")]
         [SerializeField] private float spawnForce = 2f;
         [SerializeField] private float spawnInterval = 0.1f;
-
-        private Vector2 spawnMin;
-        private Vector2 spawnMax;
-
-        #endregion
 
         private Queue<PlinkoBall> ballPool = new Queue<PlinkoBall>();
         private int availableBalls;
 
         private Coroutine spawnRoutine;
 
+        private Vector2 spawnMin;
+        private Vector2 spawnMax;
+
+        private float sideForce = 0.5f;
+        private float spawnYOffset = 5f;
+
         private void Start()
         {
             CreatePool();
-            // Oyuncunun başlangıç hakkını UI'a bildir
-            GameEvents.TriggerBallCountChanged(availableBalls);
+            ResetBallAvailability();
         }
 
-        #region Pool
+        #region Event Subscriptions
+
+        private void OnEnable()
+        {
+            GameEvents.OnHoldStart += StartSpawning;
+            GameEvents.OnHoldEnd += StopSpawning;
+            GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
+
+            GameEvents.OnLevelDataLoaded += ApplyLevelData;   // 🔥 yeni eklendi
+        }
+
+        private void OnDisable()
+        {
+            GameEvents.OnHoldStart -= StartSpawning;
+            GameEvents.OnHoldEnd -= StopSpawning;
+            GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
+
+            GameEvents.OnLevelDataLoaded -= ApplyLevelData;
+        }
+
+        private void ApplyLevelData(LevelData data)
+        {
+            // Yeni levelde top hakkını JSON’dan al
+            initialBallCount = data.ballCount;
+
+            // Yeni level başında top sayısını resetle
+            ResetBallAvailability();
+        }
+
+        #endregion
+
+        #region Pool Creation
 
         private void CreatePool()
         {
-            // Oyuncunun hakları
-            availableBalls = initialBallCount;
-
             int count = Mathf.Max(poolSize, 1);
 
             for (int i = 0; i < count; i++)
@@ -70,7 +91,14 @@ namespace PlinkoPrototype
                 ballPool.Enqueue(ball);
             }
 
-            Debug.Log($"[BallManager] Created pool with {count} pooled balls. Player balls: {availableBalls}");
+            Debug.Log($"[BallManager] Created pool with {count} balls.");
+        }
+
+        // 🔥 Level başında top hakkını sıfırlar
+        private void ResetBallAvailability()
+        {
+            availableBalls = initialBallCount;
+            GameEvents.TriggerBallCountChanged(availableBalls);
         }
 
         private PlinkoBall GetBallFromPool()
@@ -78,8 +106,6 @@ namespace PlinkoPrototype
             if (ballPool.Count > 0)
                 return ballPool.Dequeue();
 
-            // Havuz boşsa ekstra top yarat (nadir bir durum olmalı)
-            Debug.LogWarning("[BallManager] Pool empty, instantiating extra ball.");
             PlinkoBall newBall = Instantiate(ballPrefab, ballPoolParent).GetComponent<PlinkoBall>();
             newBall.gameObject.SetActive(false);
             return newBall;
@@ -90,7 +116,7 @@ namespace PlinkoPrototype
             ball.gameObject.SetActive(false);
             ball.transform.rotation = Quaternion.identity;
             ball.rb.velocity = Vector2.zero;
-            ball.rb.angularVelocity = 0f;
+            ball.rb.angularVelocity = 0;
 
             ballPool.Enqueue(ball);
         }
@@ -104,50 +130,26 @@ namespace PlinkoPrototype
 
         #region Ball Spawning
 
-        private float sideForce = 0.5f; // sağ-sol sapma gücü
-
         public void SpawnBall()
         {
             if (availableBalls <= 0)
                 return;
 
             PlinkoBall ball = GetBallFromPool();
-            if (ball == null)
-                return;
 
-            // Rastgele spawn pozisyonu
             float randomX = Random.Range(spawnMin.x, spawnMax.x);
             float randomY = Random.Range(spawnMin.y, spawnMax.y);
-            ball.transform.position = new Vector2(randomX, randomY);
 
+            ball.transform.position = new Vector2(randomX, randomY);
             ball.transform.rotation = Quaternion.identity;
             ball.gameObject.SetActive(true);
 
-            // Random yatay kuvvet
             float randomForceX = Random.Range(-sideForce, sideForce);
             Vector2 force = new Vector2(randomForceX, -spawnForce);
             ball.rb.AddForce(force, ForceMode2D.Impulse);
 
             availableBalls--;
             GameEvents.TriggerBallCountChanged(availableBalls);
-        }
-
-        #endregion
-
-        #region Event Handling
-
-        private void OnEnable()
-        {
-            GameEvents.OnHoldStart += StartSpawning;
-            GameEvents.OnHoldEnd += StopSpawning;
-            GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
-        }
-
-        private void OnDisable()
-        {
-            GameEvents.OnHoldStart -= StartSpawning;
-            GameEvents.OnHoldEnd -= StopSpawning;
-            GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
         }
 
         private void StartSpawning()
@@ -170,13 +172,9 @@ namespace PlinkoPrototype
             while (true)
             {
                 if (availableBalls > 0)
-                {
                     SpawnBall();
-                }
                 else
-                {
                     yield break;
-                }
 
                 yield return new WaitForSeconds(spawnInterval);
             }
@@ -186,37 +184,17 @@ namespace PlinkoPrototype
 
         #region Spawn Area Update
 
-        private float spawnYOffset = 5f;
-
         private void UpdateSpawnAreaFromLevel(List<Vector2> topRow)
         {
             if (topRow == null || topRow.Count < 2)
-            {
-                Debug.LogWarning("[BallManager] Top row invalid for spawn area.");
                 return;
-            }
 
-            // X aralığı peg'lerden gelsin
             float minX = topRow[0].x;
             float maxX = topRow[topRow.Count - 1].x;
-
-            // Y: en üst peg satırının üstüne offset
             float y = topRow[0].y + spawnYOffset;
 
             spawnMin = new Vector2(minX, y);
             spawnMax = new Vector2(maxX, y);
-
-            Debug.Log($"[BallManager] Spawn Area Updated: {spawnMin.x} → {spawnMax.x} at Y={y}");
-        }
-
-        #endregion
-
-        #region AddBall
-
-        public void AddBalls(int amount)
-        {
-            availableBalls += amount;
-            GameEvents.TriggerBallCountChanged(availableBalls);
         }
 
         #endregion

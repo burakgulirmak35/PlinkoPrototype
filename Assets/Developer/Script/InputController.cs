@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
-using PlinkoPrototype;
 
 namespace PlinkoPrototype
 {

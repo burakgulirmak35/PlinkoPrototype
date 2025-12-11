@@ -1,5 +1,5 @@
 using System.Collections;
-using System.Collections.Generic;
+using System.IO;
 using PlinkoPrototype;
 using TMPro;
 using UnityEngine;
@@ -25,39 +25,52 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtHoldToSendBalls;
     [SerializeField] private TextMeshProUGUI txtBallCount;
     [SerializeField] private TextMeshProUGUI txtScore;
+    [SerializeField] private TextMeshProUGUI txtResetTimer;
 
     [Header("Game State")]
-    private int currentScore;
-    public bool isStarted = false;
+    private int currentScore = 0;
+    private int currentBallCount = 0;
+    private bool isStarted = false;
 
-    [Header("Player Data")]
+    [Header("Level Info")]
+
     private int currentLevel = 1;
+
+    [Header("Level End Settings")]
+    private bool isLevelEnding = false;
+    private float levelEndDelay = 5f;
+
+    private Coroutine holdHintCoroutine;
+    private float holdHintDelay = 5f;
 
     private void Start()
     {
-        InitUi();
-        isStarted = false;
-        LevelManager.Instance.CreateLevel(currentLevel);
-
-        currentScore = 0;
+        InitUI();
+        LoadLevelData(currentLevel);
         UpdateScoreUI();
+        StartCoroutine(UpdateResetCountdown());
+        DetectMaxLevel();
     }
 
-    private void InitUi()
+    // -------------------------------------------------------------
+    // UI INITIALIZATION
+    // -------------------------------------------------------------
+    private void InitUI()
     {
+        isStarted = false;
+        currentScore = 0;
+
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
-        txtScore.gameObject.SetActive(true);
 
-        txtPressToStart.text = "Tap to Start";
-        txtHoldToSendBalls.text = "Hold to Send Balls";
-
+        txtResetTimer.text = "--:--";
         txtBallCount.text = "Balls: 0";
         txtScore.text = "Score: 0";
     }
 
-    #region Event Subscriptions
-
+    // -------------------------------------------------------------
+    // EVENT SUBSCRIPTIONS
+    // -------------------------------------------------------------
     private void OnEnable()
     {
         GameEvents.OnTapStart += HandleTapStart;
@@ -65,6 +78,9 @@ public class GameManager : MonoBehaviour
         GameEvents.OnHoldEnd += HandleHoldEnd;
         GameEvents.OnBallScored += HandleBallScored;
         GameEvents.OnBallCountChanged += HandleBallCountChanged;
+        GameEvents.OnLevelCompleted += HandleLevelCompleted;
+        GameEvents.OnGameReset += HandleGameReset;
+        GameEvents.OnLevelStarted += HandleLevelStarted;
     }
 
     private void OnDisable()
@@ -74,8 +90,14 @@ public class GameManager : MonoBehaviour
         GameEvents.OnHoldEnd -= HandleHoldEnd;
         GameEvents.OnBallScored -= HandleBallScored;
         GameEvents.OnBallCountChanged -= HandleBallCountChanged;
+        GameEvents.OnLevelCompleted -= HandleLevelCompleted;
+        GameEvents.OnGameReset -= HandleGameReset;
+        GameEvents.OnLevelStarted -= HandleLevelStarted;
     }
 
+    // -------------------------------------------------------------
+    // INPUT HANDLERS
+    // -------------------------------------------------------------
     private void HandleTapStart()
     {
         if (!isStarted)
@@ -110,7 +132,9 @@ public class GameManager : MonoBehaviour
         StartHoldHintTimer();
     }
 
-
+    // -------------------------------------------------------------
+    // SCORE / UI UPDATES
+    // -------------------------------------------------------------
     private void HandleBallScored(int amount)
     {
         currentScore += amount;
@@ -125,47 +149,30 @@ public class GameManager : MonoBehaviour
     private void HandleBallCountChanged(int count)
     {
         currentBallCount = count;
-        UpdateBallUI(count);
+        txtBallCount.text = "Balls: " + count.ToString();
 
-        if (currentBallCount <= 0)
+        if (count <= 0 && !isLevelEnding)
         {
-            txtHoldToSendBalls.gameObject.SetActive(false);
             StopHoldHintTimer();
+            StartCoroutine(LevelEndRoutine());
         }
     }
 
-
-    public void UpdateBallUI(int value)
-    {
-        txtBallCount.text = "Balls: " + value.ToString();
-    }
-
-    #endregion
-
-    #region NotifTimer
-
-    private float holdHintDelay = 5f; // 5 sn bekleme süresi
-    private bool isHoldHintTimerRunning;
-    private int currentBallCount;
-
-    // 🆕 Coroutine referansı
-    private Coroutine holdHintCoroutine;
-
+    // -------------------------------------------------------------
+    // HOLD HINT TIMER
+    // -------------------------------------------------------------
     private void StartHoldHintTimer()
     {
         StopHoldHintTimer();
 
-        if (currentBallCount <= 0)
+        if (currentBallCount <= 0 || !isStarted)
             return;
 
-        isHoldHintTimerRunning = true;
         holdHintCoroutine = StartCoroutine(HoldHintRoutine());
     }
 
     private void StopHoldHintTimer()
     {
-        isHoldHintTimerRunning = false;
-
         if (holdHintCoroutine != null)
         {
             StopCoroutine(holdHintCoroutine);
@@ -177,16 +184,171 @@ public class GameManager : MonoBehaviour
     {
         yield return new WaitForSeconds(holdHintDelay);
 
-        isHoldHintTimerRunning = false;
-        holdHintCoroutine = null;
-
         if (currentBallCount > 0 && isStarted)
-        {
             txtHoldToSendBalls.gameObject.SetActive(true);
+    }
+
+    // -------------------------------------------------------------
+    // LEVEL LOADING
+    // -------------------------------------------------------------
+
+    private int initialBalls;
+    private void LoadLevelData(int level)
+    {
+        string path = Path.Combine(Application.streamingAssetsPath, $"Levels/level_{level}.json");
+
+        if (!File.Exists(path))
+        {
+            Debug.LogError("LEVEL DATA NOT FOUND: " + path);
+            return;
         }
+
+        string json = File.ReadAllText(path);
+        LevelData data = JsonUtility.FromJson<LevelData>(json);
+
+        initialBalls = data.ballCount;
+        GameEvents.TriggerLevelDataLoaded(data);
+
+        // 🆕 Level load işlemi tamamlandı → LevelStarted event’i gönderiyoruz
+        GameEvents.TriggerLevelStarted(level);
     }
 
 
-    #endregion
+    private int maxLevel;
+    private void DetectMaxLevel()
+    {
+        string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
+
+        if (!Directory.Exists(dir))
+        {
+            Debug.LogError("Levels folder not found!");
+            return;
+        }
+
+        string[] files = Directory.GetFiles(dir, "level_*.json");
+        maxLevel = files.Length;
+
+        Debug.Log("Detected Levels: " + maxLevel);
+    }
+
+    private void HandleLevelStarted(int level)
+    {
+        currentScore = 0;
+        txtScore.text = "Score: 0";
+
+        txtBallCount.text = "Balls: " + initialBalls;
+
+        txtPressToStart.gameObject.SetActive(true);
+        txtHoldToSendBalls.gameObject.SetActive(false);
+
+        isStarted = false;
+    }
+
+
+    // -------------------------------------------------------------
+    // LEVEL END → EVENT DRIVEN COMPLETION
+    // -------------------------------------------------------------
+    private IEnumerator LevelEndRoutine()
+    {
+        isLevelEnding = true;
+
+        Debug.Log("Balls finished. Ending level in 5 seconds...");
+        yield return new WaitForSeconds(levelEndDelay);
+
+        GameEvents.TriggerLevelCompleted();
+    }
+
+    private void HandleLevelCompleted()
+    {
+        SaveEndOfGameData();
+
+        currentLevel++;
+        if (currentLevel > maxLevel)
+            currentLevel = maxLevel;
+
+        LoadLevelData(currentLevel);
+
+        ResetUIForNewLevel();
+
+        isLevelEnding = false;
+    }
+
+
+    private void ResetUIForNewLevel()
+    {
+        currentScore = 0;
+        UpdateScoreUI();
+
+        txtPressToStart.gameObject.SetActive(true);
+        txtHoldToSendBalls.gameObject.SetActive(false);
+
+        isStarted = false;
+    }
+
+    // -------------------------------------------------------------
+    // END OF GAME PLAYER DATA SAVE
+    // -------------------------------------------------------------
+    private void SaveEndOfGameData()
+    {
+        int ballsUsed = initialBalls - currentBallCount;
+        int moneyEarned = currentScore;
+
+        PlayerSessionData session = new PlayerSessionData()
+        {
+            date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            levelId = currentLevel,
+            ballUsed = ballsUsed,
+            moneyEarned = moneyEarned
+        };
+
+        PlayerDataManager.Instance.AddSession(session);
+        PlayerDataManager.Instance.AddMoney(moneyEarned);
+
+        Debug.Log("SESSION SAVED.");
+    }
+
+    // -------------------------------------------------------------
+    // GAME RESET HANDLER
+    // -------------------------------------------------------------
+    private void HandleGameReset()
+    {
+        currentLevel = 1;
+        LoadLevelData(currentLevel);
+    }
+
+
+    // -------------------------------------------------------------
+    // GAME TIMER
+    // -------------------------------------------------------------
+    private IEnumerator UpdateResetCountdown()
+    {
+        while (true)
+        {
+            UpdateResetTimerUI();
+            yield return new WaitForSeconds(1f);
+        }
+    }
+
+    private void UpdateResetTimerUI()
+    {
+        string lastResetStr = PlayerDataManager.Instance.Data.lastResetUtc;
+        if (string.IsNullOrEmpty(lastResetStr))
+        {
+            txtResetTimer.text = "--:--";
+            return;
+        }
+
+        System.DateTime lastReset = System.DateTime.Parse(lastResetStr);
+        System.DateTime nextReset = lastReset.AddMinutes(15);
+        System.TimeSpan diff = nextReset - System.DateTime.UtcNow;
+
+        if (diff.TotalSeconds <= 0)
+        {
+            txtResetTimer.text = "00:00";
+            return;
+        }
+
+        txtResetTimer.text = $"{diff.Minutes:00}:{diff.Seconds:00}";
+    }
 
 }

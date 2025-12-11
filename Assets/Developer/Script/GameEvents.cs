@@ -22,6 +22,9 @@ namespace PlinkoPrototype
         public static void TriggerLevelChanged(List<Vector2> topRow)
             => OnLevelChanged?.Invoke(topRow);
 
+        public static Action OnGameReset;
+        public static void TriggerGameReset() => OnGameReset?.Invoke();
+
         #region Score
         public static Action<int> OnBallScored;
         public static void TriggerBallScored(int score)
@@ -35,5 +38,25 @@ namespace PlinkoPrototype
             OnBallCountChanged?.Invoke(count);
         }
         #endregion
+
+        #region Level
+
+        public static Action<LevelData> OnLevelDataLoaded;
+        public static void TriggerLevelDataLoaded(LevelData data)
+            => OnLevelDataLoaded?.Invoke(data);
+
+        #endregion
+
+        #region Level Completion
+        public static Action OnLevelCompleted;
+        public static void TriggerLevelCompleted() => OnLevelCompleted?.Invoke();
+        #endregion
+
+        #region Level Started
+        public static Action<int> OnLevelStarted;
+        public static void TriggerLevelStarted(int level)
+            => OnLevelStarted?.Invoke(level);
+        #endregion
+
     }
 }

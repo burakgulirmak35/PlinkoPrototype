@@ -1,0 +1,13 @@
+{
+  "id": 2,
+  "bucketCount": 6,
+  "ballCount": 180,
+  "buckets": [
+    { "score": 80,  "color": "#FF5722" },
+    { "score": 40,  "color": "#FFC107" },
+    { "score": 20,  "color": "#03A9F4" },
+    { "score": 20,  "color": "#03A9F4" },
+    { "score": 40,  "color": "#FFC107" },
+    { "score": 80,  "color": "#FF5722" }
+  ]
+}
