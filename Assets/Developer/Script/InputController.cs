@@ -12,12 +12,8 @@ namespace PlinkoPrototype
         {
             if (!isHolding)
             {
-                // İlk basış anı
                 GameEvents.OnTapStart?.Invoke();
-
-                // Basılı tutma başladı
                 GameEvents.OnHoldStart?.Invoke();
-
                 isHolding = true;
             }
         }
@@ -27,11 +23,7 @@ namespace PlinkoPrototype
             if (isHolding)
             {
                 isHolding = false;
-
-                // Basılı tutma bitti
                 GameEvents.OnHoldEnd?.Invoke();
-
-                // Tap sonlandı
                 GameEvents.OnTapEnd?.Invoke();
             }
         }

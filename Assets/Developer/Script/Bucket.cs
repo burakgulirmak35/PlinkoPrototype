@@ -11,6 +11,10 @@ public class Bucket : MonoBehaviour
     [SerializeField] private Transform leftEdge;
     [SerializeField] private Transform rightEdge;
 
+    #region Public Properties
+    public int bucketScore { get; private set; }
+    #endregion
+
     public void SetWidth(float width = 1)
     {
         // --- SpriteRenderer scale ayarı ---
@@ -25,6 +29,7 @@ public class Bucket : MonoBehaviour
 
     public void SetScore(int score)
     {
+        bucketScore = score;
         textScore.text = score.ToString();
     }
 }
