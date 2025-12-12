@@ -182,20 +182,6 @@ Bu HUD, sistemin doğru çalıştığını **görsel olarak kanıtlamak** için 
 2. `StreamingAssets/Levels` klasörünü kontrol et
 3. Ana sahneyi aç
 4. Play
-
----
-
-## Sonuç
-
-Bu proje:
-
-- Case’te istenen tüm teknik gereksinimleri karşılar
-- Gerçek mobil oyun mimarilerini simüle eder
-- Performans, güvenlik ve ölçeklenebilirliği önceliklendirir
-
-Amaç, yalnızca çalışan bir Plinko üretmek değil;  
-**üretim ortamına hazır bir sistem yaklaşımı** sunmaktır.
-
 ---
 
 ## 🎥 Gameplay Video
