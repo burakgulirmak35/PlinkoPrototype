@@ -1,8 +1,3 @@
-<img width="489" height="475" alt="Gameplay Preview"
-src="https://github.com/user-attachments/assets/c7ee6a80-442f-4d7b-97d5-2b84d3426607" />
-
----
-
 ## 🎮 Oynanış (Core Gameplay)
 
 - Oyuncu ekrana **basılı tutarak** Plinko toplarını bırakır.
