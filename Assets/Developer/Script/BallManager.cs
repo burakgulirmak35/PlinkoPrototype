@@ -31,21 +31,16 @@ namespace PlinkoPrototype
         [SerializeField] private float spawnForce = 2f;
         [SerializeField] private float spawnInterval = 0.1f;
 
-        private Queue<PlinkoBall> ballPool = new Queue<PlinkoBall>();
+        private readonly Queue<PlinkoBall> ballPool = new Queue<PlinkoBall>();
         private int availableBalls;
-
         private Coroutine spawnRoutine;
 
         private Vector2 spawnMin;
         private Vector2 spawnMax;
 
         private float sideForce = 0.5f;
-        private float spawnYOffset = 5f;
+        [SerializeField] private float spawnYOffset = 2f;
 
-        /// <summary>
-        /// Her top spawn olduğunda bir artırılır.
-        /// Benzersiz top kimliği (BallId) böyle üretilir.
-        /// </summary>
         private int ballIdCounter = 0;
 
         private void Start()
@@ -54,16 +49,12 @@ namespace PlinkoPrototype
             ResetBallAvailability();
         }
 
-        // ------------------------------------------
-        // EVENT SUBSCRIPTIONS
-        // ------------------------------------------
         private void OnEnable()
         {
             GameEvents.OnHoldStart += StartSpawning;
             GameEvents.OnHoldEnd += StopSpawning;
             GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
-
-            GameEvents.OnLevelDataLoaded += ApplyLevelData;
+            GameEvents.OnGameReset += HandleGameReset;
         }
 
         private void OnDisable()
@@ -71,31 +62,26 @@ namespace PlinkoPrototype
             GameEvents.OnHoldStart -= StartSpawning;
             GameEvents.OnHoldEnd -= StopSpawning;
             GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
-
-            GameEvents.OnLevelDataLoaded -= ApplyLevelData;
+            GameEvents.OnGameReset -= HandleGameReset;
         }
 
-        private void ApplyLevelData(LevelData data)
+        private void HandleGameReset()
         {
-            initialBallCount = data.ballCount;
             ResetBallAvailability();
         }
 
-        // ------------------------------------------
+        // ------------------------------------------------
         // POOL
-        // ------------------------------------------
+        // ------------------------------------------------
         private void CreatePool()
         {
-            int count = Mathf.Max(poolSize, 1);
-
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < poolSize; i++)
             {
-                PlinkoBall ball = Instantiate(ballPrefab, ballPoolParent).GetComponent<PlinkoBall>();
+                PlinkoBall ball = Instantiate(ballPrefab, ballPoolParent)
+                    .GetComponent<PlinkoBall>();
                 ball.gameObject.SetActive(false);
                 ballPool.Enqueue(ball);
             }
-
-            Debug.Log($"[BallManager] Created pool with {count} balls.");
         }
 
         private void ResetBallAvailability()
@@ -109,58 +95,33 @@ namespace PlinkoPrototype
             if (ballPool.Count > 0)
                 return ballPool.Dequeue();
 
-            PlinkoBall newBall = Instantiate(ballPrefab, ballPoolParent).GetComponent<PlinkoBall>();
-            newBall.gameObject.SetActive(false);
-            return newBall;
+            PlinkoBall ball = Instantiate(ballPrefab, ballPoolParent)
+                .GetComponent<PlinkoBall>();
+            ball.gameObject.SetActive(false);
+            return ball;
         }
 
         public void ReturnBall(PlinkoBall ball)
         {
+            if (ball == null) return;
+
             ball.gameObject.SetActive(false);
-            ball.transform.rotation = Quaternion.identity;
-            ball.rb.velocity = Vector2.zero;
-            ball.rb.angularVelocity = 0;
+
+            if (ball.rb != null)
+            {
+                ball.rb.velocity = Vector2.zero;
+                ball.rb.angularVelocity = 0f;
+            }
 
             ballPool.Enqueue(ball);
         }
 
-        public int GetRemainingBalls()
-        {
-            return availableBalls;
-        }
-
-        // ------------------------------------------
-        // SPAWNING
-        // ------------------------------------------
-        public void SpawnBall()
-        {
-            if (availableBalls <= 0)
-                return;
-
-            PlinkoBall ball = GetBallFromPool();
-
-            float randomX = Random.Range(spawnMin.x, spawnMax.x);
-            float randomY = Random.Range(spawnMin.y, spawnMax.y);
-
-            ball.transform.position = new Vector2(randomX, randomY);
-
-            // 🔥 Benzersiz Ball ID ataması
-            ball.BallId = ++ballIdCounter;
-
-            ball.transform.rotation = Quaternion.identity;
-            ball.gameObject.SetActive(true);
-
-            float randomForceX = Random.Range(-sideForce, sideForce);
-            Vector2 force = new Vector2(randomForceX, -spawnForce);
-            ball.rb.AddForce(force, ForceMode2D.Impulse);
-
-            availableBalls--;
-            GameEvents.TriggerBallCountChanged(availableBalls);
-        }
-
+        // ------------------------------------------------
+        // SPAWN
+        // ------------------------------------------------
         private void StartSpawning()
         {
-            if (spawnRoutine == null)
+            if (spawnRoutine == null && availableBalls > 0)
                 spawnRoutine = StartCoroutine(SpawnRoutine());
         }
 
@@ -175,20 +136,46 @@ namespace PlinkoPrototype
 
         private IEnumerator SpawnRoutine()
         {
-            while (true)
+            while (availableBalls > 0)
             {
-                if (availableBalls > 0)
-                    SpawnBall();
-                else
-                    yield break;
-
+                SpawnBall();
                 yield return new WaitForSeconds(spawnInterval);
             }
+
+            spawnRoutine = null;
         }
 
-        // ------------------------------------------
-        // SPAWN AREA UPDATE
-        // ------------------------------------------
+        private void SpawnBall()
+        {
+            if (availableBalls <= 0)
+                return;
+
+            PlinkoBall ball = GetBallFromPool();
+
+            float randomX = Random.Range(spawnMin.x, spawnMax.x);
+            float y = spawnMin.y;
+
+            ball.transform.position = new Vector2(randomX, y);
+            ball.BallId = ++ballIdCounter;
+            ball.transform.rotation = Quaternion.identity;
+            ball.gameObject.SetActive(true);
+
+            if (ball.rb != null)
+            {
+                float randomForceX = Random.Range(-sideForce, sideForce);
+                ball.rb.AddForce(
+                    new Vector2(randomForceX, -spawnForce),
+                    ForceMode2D.Impulse
+                );
+            }
+
+            availableBalls--;
+            GameEvents.TriggerBallCountChanged(availableBalls);
+        }
+
+        // ------------------------------------------------
+        // SPAWN AREA
+        // ------------------------------------------------
         private void UpdateSpawnAreaFromLevel(List<Vector2> topRow)
         {
             if (topRow == null || topRow.Count < 2)

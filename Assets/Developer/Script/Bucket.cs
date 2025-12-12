@@ -16,9 +16,7 @@ namespace PlinkoPrototype
         [Header("Bucket Animator")]
         [SerializeField] private Animator bucketAnimator;
 
-        #region Score Data
         public int bucketScore { get; private set; }
-        #endregion
 
         [Header("Coin Text Pool")]
         [SerializeField] private CoinText coinTextPrefab;
@@ -30,10 +28,12 @@ namespace PlinkoPrototype
 
         private void Awake()
         {
-            // Coin pool oluştur
-            coinPool = new CoinText[coinPoolSize];
+            if (coinTextSpawnParent == null)
+                coinTextSpawnParent = transform;
 
-            for (int i = 0; i < coinPoolSize; i++)
+            coinPool = new CoinText[Mathf.Max(coinPoolSize, 1)];
+
+            for (int i = 0; i < coinPool.Length; i++)
             {
                 CoinText c = Instantiate(coinTextPrefab, coinTextSpawnParent);
                 c.gameObject.SetActive(false);
@@ -41,36 +41,45 @@ namespace PlinkoPrototype
             }
         }
 
-        // ----------------------------------------------
-        // Bucket Settings
-        // ----------------------------------------------
         public void SetWidth(float width = 1)
         {
-            bucketSprite.size = new Vector2(width, 1);
-            leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.localPosition.y, 0f);
-            rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.localPosition.y, 0f);
+            if (bucketSprite != null)
+                bucketSprite.size = new Vector2(width, 1);
+
+            if (leftEdge != null)
+                leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.localPosition.y, 0f);
+
+            if (rightEdge != null)
+                rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.localPosition.y, 0f);
         }
 
         public void SetScore(int score)
         {
             bucketScore = score;
-            textScore.text = score.ToString();
+            if (textScore != null)
+                textScore.text = score.ToString();
         }
 
         public void SetColor(string hex)
         {
+            if (bucketSprite == null) return;
+
             if (ColorUtility.TryParseHtmlString(hex, out Color c))
                 bucketSprite.color = c;
         }
 
         public void Score(Vector2 pos)
         {
-            bucketAnimator.Play("Score");
+            if (bucketAnimator != null)
+                bucketAnimator.Play("Score");
+
             CoinText c = coinPool[coinPoolIndex];
+            if (c == null) return;
+
             c.gameObject.SetActive(false); // zorla reset
-            coinPoolIndex = (coinPoolIndex + 1) % coinPoolSize;
-            Vector3 spawnPos = pos;
-            c.transform.position = spawnPos;
+            coinPoolIndex = (coinPoolIndex + 1) % coinPool.Length;
+
+            c.transform.position = pos;
             c.SetEntryText("+" + bucketScore);
             c.gameObject.SetActive(true);
         }

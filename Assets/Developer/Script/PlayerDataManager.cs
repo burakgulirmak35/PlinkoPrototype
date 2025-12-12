@@ -15,6 +15,10 @@ public class PlayerSessionData
 [System.Serializable]
 public class PlayerData
 {
+    public int savedLevel;
+    public int savedRoundScore;
+    public int savedTotalBallsRemaining;
+    public int savedBallsScoredThisLevel;
     public int totalMoney = 0;
     public List<PlayerSessionData> sessionHistory = new List<PlayerSessionData>();
     public string lastResetUtc;

@@ -18,13 +18,10 @@ namespace PlinkoPrototype
 
             Instance = this;
             cam = Camera.main;
-
-            screenBottomY = cam.ScreenToWorldPoint(new Vector3(0f, 0f, -cam.transform.position.z)).y;
         }
         #endregion
 
         [Header("Parents")]
-        [SerializeField] private Transform environmentParent;
         [SerializeField] private Transform bucketParent;
         [SerializeField] private Transform pegParent;
 
@@ -50,10 +47,10 @@ namespace PlinkoPrototype
         private readonly List<float> bucketCenters = new List<float>();
         private readonly List<List<Vector2>> pegRows = new List<List<Vector2>>();
 
-        private LevelData currentLevelData;   // JSON'dan gelen data
-        private int bucketCount;              // JSON üzerinden set edilecek
+        private LevelData currentLevelData;
+        private int bucketCount;
 
-        #region Event Subscription
+        #region Events
         private void OnEnable()
         {
             GameEvents.OnLevelDataLoaded += ApplyLevelData;
@@ -63,12 +60,15 @@ namespace PlinkoPrototype
         {
             GameEvents.OnLevelDataLoaded -= ApplyLevelData;
         }
+        #endregion
 
+        // ------------------------------------------------
+        // LEVEL DATA
+        // ------------------------------------------------
         private void ApplyLevelData(LevelData data)
         {
             currentLevelData = data;
 
-            // Güvenlik kontrolü
             if (data.buckets == null || data.buckets.Count == 0)
             {
                 Debug.LogError("[LevelManager] LevelData has no bucket definitions!");
@@ -76,23 +76,27 @@ namespace PlinkoPrototype
             }
 
             bucketCount = data.buckets.Count;
-
             CreateLevel();
         }
-        #endregion
 
-        // ---------------- LEVEL CREATION ----------------
-
+        // ------------------------------------------------
+        // LEVEL CREATION
+        // ------------------------------------------------
         private void CreateLevel()
         {
+            screenBottomY = cam.ScreenToWorldPoint(
+                new Vector3(0f, 0f, -cam.transform.position.z)
+            ).y;
+
             ClearPreviousObjects();
             GenerateBuckets();
             GeneratePegs();
-            ApplyLevelOffset();
             NotifyLevelChanged();
         }
 
-        #region Clear
+        // ------------------------------------------------
+        // CLEAR
+        // ------------------------------------------------
         private void ClearPreviousObjects()
         {
             foreach (Transform t in bucketParent)
@@ -106,9 +110,10 @@ namespace PlinkoPrototype
             bucketList.Clear();
             pegList.Clear();
         }
-        #endregion
 
-        #region Buckets
+        // ------------------------------------------------
+        // BUCKETS
+        // ------------------------------------------------
         private void GenerateBuckets()
         {
             float leftX = cam.ViewportToWorldPoint(new Vector3(0f, 0f, 0f)).x;
@@ -116,7 +121,7 @@ namespace PlinkoPrototype
             float width = rightX - leftX;
             float bucketWidth = width / bucketCount;
 
-            float bottomY = screenBottomY;
+            float bottomY = screenBottomY + levelVerticalOffset;
 
             for (int i = 0; i < bucketCount; i++)
             {
@@ -127,9 +132,7 @@ namespace PlinkoPrototype
                 bucketComp.transform.position = new Vector3(centerX, bottomY, 0f);
                 bucketComp.SetWidth(bucketWidth);
 
-                // ---- JSON’dan SCORE & COLOR uygulayın ----
                 var bucketData = currentLevelData.buckets[i];
-
                 bucketComp.SetScore(bucketData.score);
                 bucketComp.SetColor(bucketData.color);
 
@@ -137,12 +140,17 @@ namespace PlinkoPrototype
                 bucketList.Add(bucketComp);
             }
         }
-        #endregion
 
-        #region Pegs
+        // ------------------------------------------------
+        // PEGS
+        // ------------------------------------------------
         private void GeneratePegs()
         {
-            float firstRowY = screenBottomY + bucketHeight + pegStartOffsetY;
+            float firstRowY =
+                screenBottomY
+                + levelVerticalOffset
+                + bucketHeight
+                + pegStartOffsetY;
 
             pegRows.Clear();
 
@@ -178,24 +186,10 @@ namespace PlinkoPrototype
                 }
             }
         }
-        #endregion
 
-        #region Offset
-        private bool offsetApplied = false;
-        private void ApplyLevelOffset()
-        {
-            if (offsetApplied)
-                return;
-
-            Vector3 pos = environmentParent.position;
-            pos.y += levelVerticalOffset;
-            environmentParent.position = pos;
-            offsetApplied = true;
-        }
-
-        #endregion
-
-        #region Notify
+        // ------------------------------------------------
+        // NOTIFY
+        // ------------------------------------------------
         private void NotifyLevelChanged()
         {
             if (pegRows.Count == 0)
@@ -204,9 +198,10 @@ namespace PlinkoPrototype
             var topRow = pegRows[pegRows.Count - 1];
             GameEvents.TriggerLevelChanged(topRow);
         }
-        #endregion
 
-        #region Spawn Accessor
+        // ------------------------------------------------
+        // SPAWN ACCESSOR
+        // ------------------------------------------------
         public Vector2 GetRandomSpawnPosition()
         {
             if (pegRows.Count == 0)
@@ -221,6 +216,5 @@ namespace PlinkoPrototype
             float randomX = Random.Range(minX, maxX);
             return new Vector2(randomX, y);
         }
-        #endregion
     }
 }

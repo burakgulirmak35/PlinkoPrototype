@@ -17,7 +17,7 @@ namespace PlinkoPrototype
     {
         public int id;
         public int bucketCount;
-        public int ballCount;
+        public int ballsRequiredForLevel;
         public List<BucketData> buckets;
     }
 

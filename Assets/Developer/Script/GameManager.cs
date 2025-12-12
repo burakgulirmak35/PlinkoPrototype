@@ -46,6 +46,10 @@ public class GameManager : MonoBehaviour
 
     private int initialBalls;
 
+    // 🔹 NEW SYSTEM
+    private int ballsScoredThisLevel = 0;
+    private int ballsRequiredForLevel = 0;
+
     private void Start()
     {
         InitUI();
@@ -53,7 +57,6 @@ public class GameManager : MonoBehaviour
         StartCoroutine(UpdateResetCountdown());
         DetectMaxLevel();
 
-        // 🔥 Başlangıçta wallet UI'yi server state ile senkronla
         if (RewardValidator.Instance != null)
         {
             RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
@@ -92,7 +95,7 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // UI INITIALIZATION
+    // UI INIT
     // -------------------------------------------------------------
     private void InitUI()
     {
@@ -108,7 +111,7 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // INPUT HANDLERS
+    // INPUT
     // -------------------------------------------------------------
     private void HandleTapStart()
     {
@@ -145,7 +148,7 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // WALLET
+    // WALLET / SCORE
     // -------------------------------------------------------------
     private Coroutine walletAnimRoutine;
     private float walletAnimDuration = 0.35f;
@@ -161,23 +164,16 @@ public class GameManager : MonoBehaviour
     private IEnumerator AnimateWallet(int targetValue)
     {
         int startValue = 0;
-
-        // Mevcut UI'daki sayıyı çöz (örneğin "Wallet: 120" → 120)
         if (int.TryParse(txtWallet.text.Replace("Wallet:", "").Trim(), out int current))
             startValue = current;
 
         float elapsed = 0f;
-
         while (elapsed < walletAnimDuration)
         {
             elapsed += Time.deltaTime;
-
-            float t = elapsed / walletAnimDuration;
-            t = Mathf.SmoothStep(0f, 1f, t);
-
+            float t = Mathf.SmoothStep(0f, 1f, elapsed / walletAnimDuration);
             int value = Mathf.RoundToInt(Mathf.Lerp(startValue, targetValue, t));
             txtWallet.text = $"Wallet: {value}";
-
             yield return null;
         }
 
@@ -189,17 +185,11 @@ public class GameManager : MonoBehaviour
     {
         roundScore += amount;
         txtScore.text = "Score: " + roundScore;
-    }
 
-    // -------------------------------------------------------------
-    // BALL COUNT
-    // -------------------------------------------------------------
-    private void HandleBallCountChanged(int count)
-    {
-        currentBallCount = count;
-        txtBallCount.text = "Balls: " + count;
+        // 🔥 NEW LEVEL RULE
+        ballsScoredThisLevel++;
 
-        if (count <= 0 && !isLevelEnding)
+        if (ballsScoredThisLevel >= ballsRequiredForLevel && !isLevelEnding)
         {
             StopHoldHintTimer();
             StartCoroutine(LevelEndRoutine());
@@ -207,7 +197,16 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // HOLD HINT TIMER
+    // BALL COUNT (LEVEL END REMOVED FROM HERE)
+    // -------------------------------------------------------------
+    private void HandleBallCountChanged(int count)
+    {
+        currentBallCount = count;
+        txtBallCount.text = "Balls: " + count;
+    }
+
+    // -------------------------------------------------------------
+    // HOLD HINT
     // -------------------------------------------------------------
     private void StartHoldHintTimer()
     {
@@ -237,7 +236,7 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // LEVEL LOADING
+    // LEVEL LOAD
     // -------------------------------------------------------------
     private void LoadLevelData(int level)
     {
@@ -252,21 +251,17 @@ public class GameManager : MonoBehaviour
         string json = File.ReadAllText(path);
         LevelData data = JsonUtility.FromJson<LevelData>(json);
 
-        initialBalls = data.ballCount;
-        GameEvents.TriggerLevelDataLoaded(data);
+        ballsRequiredForLevel = data.ballsRequiredForLevel;
+        ballsScoredThisLevel = 0;
 
+        GameEvents.TriggerLevelDataLoaded(data);
         GameEvents.TriggerLevelStarted(level);
     }
 
     private void DetectMaxLevel()
     {
         string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
-
-        if (!Directory.Exists(dir))
-        {
-            Debug.LogError("Levels folder not found!");
-            return;
-        }
+        if (!Directory.Exists(dir)) return;
 
         string[] files = Directory.GetFiles(dir, "level_*.json");
         maxLevel = files.Length;
@@ -275,11 +270,8 @@ public class GameManager : MonoBehaviour
     private void HandleLevelStarted(int level)
     {
         txtLevel.text = "Level: " + level;
-
-        txtBallCount.text = "Balls: " + initialBalls;
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
-
         isStarted = false;
     }
 
@@ -292,7 +284,6 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(levelEndDelay);
 
-        // Pending reward batch varsa server'a gönder
         if (RewardValidator.Instance != null)
             RewardValidator.Instance.FlushPendingRewards();
 
@@ -318,61 +309,51 @@ public class GameManager : MonoBehaviour
 
     private void SaveEndOfGameData()
     {
-        int ballsUsed = initialBalls - currentBallCount;
-
         PlayerSessionData session = new PlayerSessionData()
         {
             date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             levelId = currentLevel,
-            ballUsed = ballsUsed,
-            moneyEarned = 0 // artık score yok → wallet server'dan geliyor
+            ballUsed = 0,
+            moneyEarned = 0
         };
 
         PlayerDataManager.Instance.AddSession(session);
     }
 
     // -------------------------------------------------------------
-    // GAME RESET HANDLER
+    // RESET
     // -------------------------------------------------------------
     private async void HandleGameReset()
     {
-        // 1) SCORE → WALLET MERGE
         int earnedThisSession = roundScore;
         roundScore = 0;
         txtScore.text = "Score: 0";
 
-        // 2) SERVER'A BİLDİR + WALLET’A EKLET
         if (MockServerService.Instance != null)
-        {
             await MockServerService.Instance.NotifyClientResetAsync(earnedThisSession);
-        }
 
-        // 3) WALLET UI Güncelle
         if (RewardValidator.Instance != null)
         {
             int wallet = await MockServerService.Instance.GetWalletAsync();
             RewardValidator.Instance.SyncWalletFromServer(wallet);
         }
 
-        // 4) SESSION KAYDI (15 dk kazanımı)
         PlayerSessionData session = new PlayerSessionData()
         {
             date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             levelId = currentLevel,
-            ballUsed = 0, // reset sırasında hesaplanmaz
+            ballUsed = 0,
             moneyEarned = earnedThisSession
         };
 
         PlayerDataManager.Instance.AddSession(session);
 
-        // 5) LEVEL RESET
         currentLevel = 1;
         LoadLevelData(currentLevel);
     }
 
-
     // -------------------------------------------------------------
-    // GAME TIMER
+    // TIMER
     // -------------------------------------------------------------
     private IEnumerator UpdateResetCountdown()
     {

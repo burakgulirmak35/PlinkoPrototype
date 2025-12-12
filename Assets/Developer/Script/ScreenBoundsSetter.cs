@@ -10,8 +10,7 @@ namespace PlinkoPrototype
         public Transform bottomWall;
 
         [Header("Wall Settings")]
-        public float wallThickness = 0.5f; // X scale'i (sen zaten 0.5 demiştin)
-
+        public float wallThickness = 0.5f;
         private void Start()
         {
             FitWalls();

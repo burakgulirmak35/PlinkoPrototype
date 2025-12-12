@@ -8,7 +8,7 @@ public class LevelCreatorWindow : EditorWindow
 {
     private int levelId = 1;
     private int bucketCount = 5;
-    private int ballCount = 200;
+    private int ballsRequiredForLevel = 15;
 
     private List<BucketData> buckets = new List<BucketData>();
     private List<Color> bucketColors = new List<Color>();
@@ -23,11 +23,11 @@ public class LevelCreatorWindow : EditorWindow
 
     private void OnEnable()
     {
-        GenerateDefaultLevel(); // ilk açılış
+        GenerateDefaultLevel();
     }
 
     // ---------------------------
-    //  LOAD LEVEL JSON FROM FILE
+    // LOAD LEVEL JSON
     // ---------------------------
     private bool LoadLevelFromJson(int level)
     {
@@ -36,22 +36,23 @@ public class LevelCreatorWindow : EditorWindow
 
         if (!File.Exists(path))
         {
-            EditorUtility.DisplayDialog("Not Found",
-                $"level_{level}.json bulunamadı.\nYeni bir level oluşturabilirsiniz.",
-                "Tamam");
+            EditorUtility.DisplayDialog(
+                "Not Found",
+                $"level_{level}.json bulunamadı.",
+                "OK"
+            );
             return false;
         }
 
         string json = File.ReadAllText(path);
         LevelData loaded = JsonUtility.FromJson<LevelData>(json);
 
-        // Editor alanına doldur
-        bucketCount = loaded.bucketCount;
-        ballCount = loaded.ballCount;
+        ballsRequiredForLevel = loaded.ballsRequiredForLevel;
 
         buckets = loaded.buckets;
-        bucketColors = new List<Color>();
+        bucketCount = buckets.Count;
 
+        bucketColors = new List<Color>();
         foreach (var b in buckets)
         {
             if (ColorUtility.TryParseHtmlString(b.color, out Color c))
@@ -64,7 +65,7 @@ public class LevelCreatorWindow : EditorWindow
     }
 
     // ---------------------------
-    //  DEFAULT LEVEL TEMPLATE
+    // DEFAULT TEMPLATE
     // ---------------------------
     private void GenerateDefaultLevel()
     {
@@ -73,7 +74,7 @@ public class LevelCreatorWindow : EditorWindow
 
         for (int i = 0; i < bucketCount; i++)
         {
-            buckets.Add(new BucketData()
+            buckets.Add(new BucketData
             {
                 score = 10,
                 color = "#FFFFFF"
@@ -84,7 +85,7 @@ public class LevelCreatorWindow : EditorWindow
     }
 
     // ---------------------------
-    //  GUI
+    // GUI
     // ---------------------------
     private void OnGUI()
     {
@@ -96,8 +97,7 @@ public class LevelCreatorWindow : EditorWindow
 
         if (GUILayout.Button("Load Level", GUILayout.Width(120)))
         {
-            if (LoadLevelFromJson(levelId))
-                Debug.Log($"Loaded level_{levelId}.json");
+            LoadLevelFromJson(levelId);
         }
         EditorGUILayout.EndHorizontal();
 
@@ -108,7 +108,8 @@ public class LevelCreatorWindow : EditorWindow
             GenerateDefaultLevel();
         }
 
-        ballCount = EditorGUILayout.IntField("Ball Count", ballCount);
+        ballsRequiredForLevel =
+            EditorGUILayout.IntField("Balls Required For Level", ballsRequiredForLevel);
 
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("Bucket Definitions", EditorStyles.boldLabel);
@@ -121,8 +122,11 @@ public class LevelCreatorWindow : EditorWindow
 
             EditorGUILayout.LabelField($"Bucket {i + 1}");
 
-            buckets[i].score = EditorGUILayout.IntField("Score", buckets[i].score);
-            bucketColors[i] = EditorGUILayout.ColorField("Color", bucketColors[i]);
+            buckets[i].score =
+                EditorGUILayout.IntField("Score", buckets[i].score);
+
+            bucketColors[i] =
+                EditorGUILayout.ColorField("Color", bucketColors[i]);
 
             EditorGUILayout.EndVertical();
         }
@@ -138,19 +142,17 @@ public class LevelCreatorWindow : EditorWindow
     }
 
     // ---------------------------
-    //  SAVE LEVEL JSON
+    // SAVE JSON
     // ---------------------------
     private void SaveLevelJSON()
     {
-        // Color → Hex formatı
         for (int i = 0; i < buckets.Count; i++)
-            buckets[i].color = "#" + ColorUtility.ToHtmlStringRGB(bucketColors[i]);
+            buckets[i].color =
+                "#" + ColorUtility.ToHtmlStringRGB(bucketColors[i]);
 
-        LevelData levelData = new LevelData()
+        LevelData levelData = new LevelData
         {
-            id = levelId,
-            bucketCount = bucketCount,
-            ballCount = ballCount,
+            ballsRequiredForLevel = ballsRequiredForLevel,
             buckets = buckets
         };
 
@@ -164,11 +166,5 @@ public class LevelCreatorWindow : EditorWindow
         File.WriteAllText(filePath, json);
 
         AssetDatabase.Refresh();
-
-        EditorUtility.DisplayDialog(
-            "Level Saved",
-            $"level_{levelId}.json başarıyla kaydedildi.",
-            "OK"
-        );
     }
 }

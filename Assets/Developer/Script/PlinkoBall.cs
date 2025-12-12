@@ -6,10 +6,6 @@ namespace PlinkoPrototype
     {
         public Rigidbody2D rb;
 
-        /// <summary>
-        /// BallManager tarafından atanan benzersiz top kimliği.
-        /// Server-side validation & analytics için kullanılır.
-        /// </summary>
         public int BallId { get; set; }
 
         private bool hasScored;
@@ -18,7 +14,6 @@ namespace PlinkoPrototype
 
         private void OnEnable()
         {
-            // Pool’dan geri geldiğinde sıfırlansın
             hasScored = false;
         }
 
@@ -27,12 +22,17 @@ namespace PlinkoPrototype
             if (hasScored)
                 return;
 
-            // -------------------------------
             // BUCKET → SCORE + REWARD SYSTEM
-            // -------------------------------
             if (collision.CompareTag("Bucket"))
             {
-                tempBucket = collision.transform.parent.GetComponent<Bucket>();
+                // Eski davranışı koruyoruz (bucket collider child -> parent Bucket)
+                tempBucket = collision.transform.parent != null
+                    ? collision.transform.parent.GetComponent<Bucket>()
+                    : null;
+
+                // Daha dayanıklı fallback (prefab yapısı değişirse bozulmasın)
+                if (tempBucket == null)
+                    tempBucket = collision.GetComponentInParent<Bucket>();
 
                 if (tempBucket != null)
                 {
@@ -42,24 +42,22 @@ namespace PlinkoPrototype
                     int score = tempBucket.bucketScore;
                     string bucketId = tempBucket.name;
 
-                    // 1) UI History için event
                     GameEvents.TriggerBallScored(score);
 
-                    // 2) Server batch için reward kaydı
-                    RewardValidator.Instance.RegisterReward(score, bucketId, BallId);
-
-                    Debug.Log($"Ball {BallId} scored {score} points in bucket {bucketId}.");
+                    if (RewardValidator.Instance != null)
+                        RewardValidator.Instance.RegisterReward(score, bucketId, BallId);
 
                     tempBucket = null;
                 }
 
-                BallManager.Instance.ReturnBall(this);
+                if (BallManager.Instance != null)
+                    BallManager.Instance.ReturnBall(this);
+
+                return;
             }
 
-            // -------------------------------
             // PEG → Hit animasyonu
-            // -------------------------------
-            else if (collision.CompareTag("Peg"))
+            if (collision.CompareTag("Peg"))
             {
                 tempAnimator = collision.GetComponent<Animator>();
                 if (tempAnimator != null)

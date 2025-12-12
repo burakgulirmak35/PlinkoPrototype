@@ -1,13 +1,12 @@
 {
-  "id": 2,
-  "bucketCount": 6,
-  "ballCount": 180,
+  "ballsRequiredForLevel": 10,
   "buckets": [
-    { "score": 80,  "color": "#FF5722" },
-    { "score": 40,  "color": "#FFC107" },
-    { "score": 20,  "color": "#03A9F4" },
-    { "score": 20,  "color": "#03A9F4" },
-    { "score": 40,  "color": "#FFC107" },
-    { "score": 80,  "color": "#FF5722" }
+    { "score": 2,  "color": "#E0E0E0" },
+    { "score": 3,  "color": "#D6E4FF" },
+    { "score": 4,  "color": "#C1FFD7" },
+    { "score": 5,  "color": "#FFF3B0" },
+    { "score": 10, "color": "#FFD6A5" },
+    { "score": 15, "color": "#FFADAD" },
+    { "score": 20, "color": "#FFC6FF" }
   ]
 }
