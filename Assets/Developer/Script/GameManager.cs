@@ -26,6 +26,7 @@ public class GameManager : MonoBehaviour
     [Header("UI Elements")]
     [SerializeField] private TextMeshProUGUI txtPressToStart;
     [SerializeField] private GameObject HoldToSendBallsObj;
+    [SerializeField] private TextMeshProUGUI txtNoBalls;
     [SerializeField] private TextMeshProUGUI txtBallCount;
     [SerializeField] private TextMeshProUGUI txtWallet;
     [SerializeField] private TextMeshProUGUI txtResetTimer;
@@ -106,11 +107,14 @@ public class GameManager : MonoBehaviour
         txtPressToStart.gameObject.SetActive(true);
         HoldToSendBallsObj.SetActive(false);
 
+        txtNoBalls.gameObject.SetActive(false);
+
         txtBallCount.text = "Balls: 0";
         txtScore.text = "Score: 0";
         txtWallet.text = "Wallet: --";
         txtResetTimer.text = "--:--";
     }
+
 
     // -------------------------------------------------------------
     // SERVER RESTORE
@@ -151,6 +155,9 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     private void HandleTapStart()
     {
+        if (currentBallCount <= 0)
+            return;
+
         if (currentState == GameState.Idle)
         {
             SetState(GameState.Playing);
@@ -164,19 +171,31 @@ public class GameManager : MonoBehaviour
         }
     }
 
+
     private void HandleHoldStart()
     {
-        if (currentState != GameState.Playing) return;
+        if (currentState != GameState.Playing)
+            return;
+
+        if (currentBallCount <= 0)
+            return;
+
         HoldToSendBallsObj.SetActive(false);
         StopHoldHintTimer();
     }
 
+
     private void HandleHoldEnd()
     {
-        if (currentState != GameState.Playing) return;
-        if (currentBallCount <= 0) return;
+        if (currentState != GameState.Playing)
+            return;
+
+        if (currentBallCount <= 0)
+            return;
+
         StartHoldHintTimer();
     }
+
 
     // -------------------------------------------------------------
     // BALL COUNT → SERVER
@@ -186,7 +205,25 @@ public class GameManager : MonoBehaviour
         currentBallCount = count;
         txtBallCount.text = "Balls: " + count;
 
-        if (isRestoring) return;
+        if (currentBallCount <= 0)
+        {
+            txtPressToStart.gameObject.SetActive(false);
+            HoldToSendBallsObj.SetActive(false);
+            txtNoBalls.gameObject.SetActive(true);
+
+            StopHoldHintTimer();
+            SetState(GameState.Idle);
+        }
+        else
+        {
+            txtNoBalls.gameObject.SetActive(false);
+
+            if (currentState == GameState.Idle)
+                txtPressToStart.gameObject.SetActive(true);
+        }
+
+        if (isRestoring)
+            return;
 
         MockServerService.Instance?.ReportGameState(
             currentLevel,
@@ -195,7 +232,6 @@ public class GameManager : MonoBehaviour
             ballsScoredThisLevel
         );
     }
-
 
     // -------------------------------------------------------------
     // SCORE → SERVER
@@ -258,9 +294,6 @@ public class GameManager : MonoBehaviour
 
         txtLevel.text = "Level: " + level;
         HoldToSendBallsObj.SetActive(false);
-
-        // ❗ LevelStarted'ta server'a state yazmıyoruz.
-        // Çünkü restore sırasında currentBallCount henüz 0 olabiliyor ve kaydı eziyor.
     }
 
     private IEnumerator LevelEndRoutine()
@@ -297,7 +330,7 @@ public class GameManager : MonoBehaviour
         roundScore = 0;
         txtScore.text = "Score: 0";
 
-        while (PlayerDataManager.Instance == null)
+        while (MockServerService.Instance == null)
             await Task.Yield();
         await MockServerService.Instance.PerformHardResetAsync();
 
@@ -314,7 +347,13 @@ public class GameManager : MonoBehaviour
     private void StartHoldHintTimer()
     {
         StopHoldHintTimer();
-        if (currentBallCount <= 0 || currentState != GameState.Playing) return;
+
+        if (currentBallCount <= 0)
+            return;
+
+        if (currentState != GameState.Playing)
+            return;
+
         holdHintCoroutine = StartCoroutine(HoldHintRoutine());
     }
 
@@ -330,6 +369,7 @@ public class GameManager : MonoBehaviour
     private IEnumerator HoldHintRoutine()
     {
         yield return new WaitForSeconds(holdHintDelay);
+
         if (currentBallCount > 0 && currentState == GameState.Playing)
             HoldToSendBallsObj.SetActive(true);
     }
@@ -413,7 +453,6 @@ public class GameManager : MonoBehaviour
         {
             txtResetTimer.text = "00:00";
 
-            // 🔥 RESET TETİKLE
             if (!resetTriggered)
             {
                 resetTriggered = true;
@@ -428,6 +467,7 @@ public class GameManager : MonoBehaviour
         txtResetTimer.text =
             $"{remaining.Minutes:00}:{remaining.Seconds:00}";
     }
+
 
 
 

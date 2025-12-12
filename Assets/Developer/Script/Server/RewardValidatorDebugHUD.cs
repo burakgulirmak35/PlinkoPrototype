@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 
 using UnityEngine;
 using TMPro;
@@ -57,5 +56,3 @@ namespace PlinkoPrototype
         }
     }
 }
-
-#endif
