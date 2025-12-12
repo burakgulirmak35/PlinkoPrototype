@@ -57,10 +57,9 @@ namespace PlinkoPrototype
             if (data == null)
                 return null;
 
-            // lastResetUtc yoksa: ilk giriş gibi davran
             if (string.IsNullOrEmpty(data.lastResetUtc))
             {
-                await PerformHardResetAsync(); // bunu aşağıda yazdım
+                await PerformHardResetAsync();
                 return pdm.Data;
             }
 

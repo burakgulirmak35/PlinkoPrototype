@@ -46,8 +46,6 @@ public class GameManager : MonoBehaviour
 
     private Coroutine holdHintCoroutine;
     private float holdHintDelay = 5f;
-
-    // 🔒 Restore sırasında server'a state yazmayı geçici durdurmak için
     private bool isRestoring = false;
 
     // -------------------------------------------------------------
@@ -249,7 +247,7 @@ public class GameManager : MonoBehaviour
                 currentLevel,
                 currentBallCount,
                 roundScore,
-                ballsScoredThisLevel   // 🔥 YENİ
+                ballsScoredThisLevel
             );
         }
 

@@ -22,13 +22,11 @@ public class PlayerData
     public int savedLevel = 1;
     public int savedRoundScore = 0;
 
-    // 🔥 0 OLMAMALI
     public int savedTotalBallsRemaining = 200;
 
     public int savedBallsScoredThisLevel = 0;
     public int totalMoney = 0;
 
-    // 🔥 Top bazlı history
     public List<RewardPackage> sessionRewards = new List<RewardPackage>();
     public List<PlayerSessionData> sessionHistory = new List<PlayerSessionData>();
 
@@ -75,14 +73,12 @@ public class PlayerDataManager : MonoBehaviour
         string json = File.ReadAllText(filePath);
         Data = JsonUtility.FromJson<PlayerData>(json);
 
-        // lastReset yoksa → temiz başla
         if (string.IsNullOrEmpty(Data.lastResetUtc))
         {
             PerformHardReset();
             return;
         }
 
-        // ISO 8601 UTC bekliyoruz
         if (!DateTime.TryParseExact(
             Data.lastResetUtc,
             "o",
@@ -95,7 +91,6 @@ public class PlayerDataManager : MonoBehaviour
             return;
         }
 
-        // ⚠️ Kritik satır
         TimeSpan diff = DateTime.UtcNow - lastReset.ToUniversalTime();
         double minutesPassed = diff.TotalMinutes;
 

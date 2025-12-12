@@ -57,7 +57,6 @@ namespace PlinkoPrototype
         private void Start()
         {
             CreatePool();
-            // ❗ Burada TOP SET ETMİYORUZ
         }
 
         private void OnEnable()
@@ -66,8 +65,6 @@ namespace PlinkoPrototype
             GameEvents.OnHoldEnd += StopSpawning;
             GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
             GameEvents.OnGameStateChanged += HandleGameStateChanged;
-
-            // 🔥 TEK GERÇEK KAYNAK
             GameEvents.OnBallCountRestore += ApplyBallCountFromServer;
             GameEvents.OnGameReset += HandleGameReset;
         }
@@ -78,7 +75,6 @@ namespace PlinkoPrototype
             GameEvents.OnHoldEnd -= StopSpawning;
             GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
             GameEvents.OnGameStateChanged -= HandleGameStateChanged;
-
             GameEvents.OnBallCountRestore -= ApplyBallCountFromServer;
             GameEvents.OnGameReset -= HandleGameReset;
         }
