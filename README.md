@@ -195,3 +195,11 @@ Bu proje:
 
 Amaç, yalnızca çalışan bir Plinko üretmek değil;  
 **üretim ortamına hazır bir sistem yaklaşımı** sunmaktır.
+
+---
+
+## 🎥 Gameplay Video
+<br/>
+[![Gameplay Video](https://img.youtube.com/vi/TAYuU-Meu0o/0.jpg)](https://youtube.com/shorts/TAYuU-Meu0o)
+
+*Kısa gameplay videosu: core Plinko mekaniği, level progression ve reward akışı.*
