@@ -67,5 +67,11 @@ namespace PlinkoPrototype
         }
         #endregion
 
+        public static event System.Action<int> OnBallCountRestore;
+        public static void TriggerBallCountRestore(int count)
+        {
+            OnBallCountRestore?.Invoke(count);
+        }
+
     }
 }

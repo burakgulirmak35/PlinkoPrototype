@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -6,8 +7,14 @@ namespace PlinkoPrototype
 {
     public class MockServerService : MonoBehaviour
     {
-        #region Singleton
         public static MockServerService Instance { get; private set; }
+
+        [SerializeField] private int minLatencyMs = 80;
+        [SerializeField] private int maxLatencyMs = 250;
+        public int MinLatency => minLatencyMs;
+        public int MaxLatency => maxLatencyMs;
+        private int serverWallet;
+        private readonly HashSet<int> processedBallIds = new HashSet<int>();
 
         private void Awake()
         {
@@ -19,36 +26,6 @@ namespace PlinkoPrototype
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
-        }
-        #endregion
-
-        [Header("Latency Simulation (ms)")]
-        [SerializeField] private int minLatencyMs = 80;
-        [SerializeField] private int maxLatencyMs = 250;
-
-        public int MinLatency => minLatencyMs;
-        public int MaxLatency => maxLatencyMs;
-
-        private int serverWallet;
-        private bool initialized = false;
-
-        // 🔥 Fraud detection için kullanılan set
-        private readonly HashSet<int> processedBallIds = new HashSet<int>();
-
-        private async void Start()
-        {
-            await InitializeServerStateFromLocal();
-        }
-
-        private Task SimulateLatency()
-        {
-            int delay = Random.Range(minLatencyMs, maxLatencyMs);
-            return Task.Delay(delay);
-        }
-
-        private async Task InitializeServerStateFromLocal()
-        {
-            await SimulateLatency();
 
             if (PlayerDataManager.Instance != null &&
                 PlayerDataManager.Instance.Data != null)
@@ -56,143 +33,122 @@ namespace PlinkoPrototype
                 serverWallet = PlayerDataManager.Instance.Data.totalMoney;
             }
 
-            initialized = true;
+            Debug.Log($"[SERVER INIT] Wallet loaded: {serverWallet}");
         }
 
-        public async Task<int> GetWalletAsync()
+
+        private Task SimulateLatency()
         {
-            if (!initialized)
-                await InitializeServerStateFromLocal();
-
-            await SimulateLatency();
-            return serverWallet;
+            return Task.Delay(UnityEngine.Random.Range(minLatencyMs, maxLatencyMs));
         }
 
-        // ---------------------------------------------------------
-        // VALIDATE BATCH
-        // ---------------------------------------------------------
+        // -------------------------------------------------
+        // SESSION RESUME
+        // -------------------------------------------------
+        public async Task<PlayerData> GetPlayerDataAsync()
+        {
+            await SimulateLatency();
+
+            var pdm = PlayerDataManager.Instance;
+            if (pdm == null)
+                return null;
+
+            var data = pdm.Data;
+            if (data == null)
+                return null;
+
+            // lastResetUtc yoksa: ilk giriş gibi davran
+            if (string.IsNullOrEmpty(data.lastResetUtc))
+            {
+                await PerformHardResetAsync(); // bunu aşağıda yazdım
+                return pdm.Data;
+            }
+
+            // 15 dk kontrol
+            System.DateTime lastReset = System.DateTime.Parse(data.lastResetUtc);
+            var diff = System.DateTime.UtcNow - lastReset;
+
+            if (diff.TotalMinutes >= 15)
+            {
+                await PerformHardResetAsync();
+                return pdm.Data;
+            }
+
+            // Devam session
+            return data;
+        }
+
+
+        // -------------------------------------------------
+        // GAME STATE SAVE (AUTHORITATIVE)
+        // -------------------------------------------------
+        public void ReportGameState(int level, int ballsRemaining, int score)
+        {
+            var data = PlayerDataManager.Instance.Data;
+
+            data.savedLevel = level;
+            data.savedTotalBallsRemaining = ballsRemaining;
+            data.savedRoundScore = score;
+
+            PlayerDataManager.Instance.Save();
+
+        }
+
+        // -------------------------------------------------
+        // REWARD VALIDATION (TOP BAZLI HISTORY)
+        // -------------------------------------------------
         public async Task<int> ValidateRewardsAsync(List<RewardPackage> batch)
         {
-            if (!initialized)
-                await InitializeServerStateFromLocal();
-
             await SimulateLatency();
 
-            if (batch == null || batch.Count == 0)
-                return serverWallet;
-
-            int totalDelta = 0;
+            var data = PlayerDataManager.Instance.Data;
 
             foreach (var reward in batch)
             {
-                if (reward == null)
+                if (processedBallIds.Contains(reward.ballId))
                     continue;
 
-                // -------------------------
-                // FRAUD DETECTION
-                // -------------------------
-                AnalyzeReward(reward);
+                processedBallIds.Add(reward.ballId);
+                data.sessionRewards.Add(reward);
 
-                // negative or weird scores — reject scoring (but log)
-                if (reward.bucketScore <= 0 || reward.bucketScore > 10000)
-                {
-                    Debug.LogWarning($"[MOCK SERVER] Ignored suspicious score value: {reward.bucketScore}");
-                    continue;
-                }
-
-                totalDelta += reward.bucketScore;
+                serverWallet += reward.bucketScore;
             }
 
-            serverWallet += totalDelta;
-
-            // Persist server wallet to PlayerData
-            if (PlayerDataManager.Instance != null &&
-                PlayerDataManager.Instance.Data != null)
-            {
-                PlayerDataManager.Instance.Data.totalMoney = serverWallet;
-                PlayerDataManager.Instance.SavePlayerData();
-            }
+            data.totalMoney = serverWallet;
+            PlayerDataManager.Instance.Save();
 
             return serverWallet;
         }
 
-        // ---------------------------------------------------------
-        // FRAUD DETECTION LOGIC
-        // ---------------------------------------------------------
-        private void AnalyzeReward(RewardPackage reward)
-        {
-            // 1) Duplicate BallId detection
-            if (processedBallIds.Contains(reward.ballId))
-            {
-                Debug.LogWarning(
-                    $"[MOCK SERVER] Suspicious: Duplicate BallId detected → ballId={reward.ballId}, bucket={reward.bucketId}"
-                );
-            }
-            else
-            {
-                processedBallIds.Add(reward.ballId);
-            }
-
-            // 2) Missing / manipulated bucket ID
-            if (string.IsNullOrEmpty(reward.bucketId))
-            {
-                Debug.LogWarning(
-                    $"[MOCK SERVER] Suspicious: Missing bucketId on reward ballId={reward.ballId}"
-                );
-            }
-
-            // 3) Abnormally high score
-            if (reward.bucketScore > 1000)
-            {
-                Debug.LogWarning(
-                    $"[MOCK SERVER] High score anomaly → {reward.bucketScore} from bucket={reward.bucketId}"
-                );
-            }
-
-            // 4) Impossible time manipulation (optional future check)
-            // DateTime.Parse(reward.timeUtc) … 
-        }
-
-        public async Task NotifyClientResetAsync(int sessionEarnings)
+        // -------------------------------------------------
+        // HARD RESET (15 DK)
+        // -------------------------------------------------
+        public async Task PerformHardResetAsync()
         {
             await SimulateLatency();
 
-            // Score → Wallet merge
-            if (sessionEarnings > 0)
-            {
-                serverWallet += sessionEarnings;
-                Debug.Log($"[MOCK SERVER] Added session earnings: +{sessionEarnings}");
-            }
+            var data = PlayerDataManager.Instance.Data;
 
-            // Persist wallet
-            if (PlayerDataManager.Instance != null &&
-                PlayerDataManager.Instance.Data != null)
-            {
-                PlayerDataManager.Instance.Data.totalMoney = serverWallet;
-                PlayerDataManager.Instance.SavePlayerData();
-            }
+            data.savedLevel = 1;
+            data.savedRoundScore = 0;
+            data.savedTotalBallsRemaining = 200;
+            data.savedBallsScoredThisLevel = 0;
 
-            // Fraud reset (bir önceki adımda eklediğimiz)
+            data.sessionRewards.Clear();
+            data.lastResetUtc = DateTime.UtcNow.ToString("o");
+
             processedBallIds.Clear();
+
+            PlayerDataManager.Instance.Save();
         }
 
-
-        #region Subscribetion
-
-        private void OnEnable()
+        // -------------------------------------------------
+        // WALLET
+        // -------------------------------------------------
+        public async Task<int> GetWalletAsync()
         {
-            GameEvents.OnGameReset += ResetFraudData;
+            await SimulateLatency();
+            return serverWallet;
         }
-        private void OnDisable()
-        {
-            GameEvents.OnGameReset -= ResetFraudData;
-        }
-
-        private void ResetFraudData()
-        {
-            processedBallIds.Clear();
-            Debug.Log("[MOCK SERVER] Fraud tracking reset.");
-        }
-        #endregion
     }
 }

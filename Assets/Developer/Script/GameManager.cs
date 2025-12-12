@@ -1,5 +1,6 @@
 using System.Collections;
 using System.IO;
+using System.Threading.Tasks;
 using PlinkoPrototype;
 using TMPro;
 using UnityEngine;
@@ -23,7 +24,6 @@ public class GameManager : MonoBehaviour
     [Header("UI Elements")]
     [SerializeField] private TextMeshProUGUI txtPressToStart;
     [SerializeField] private GameObject HoldToSendBallsObj;
-    [SerializeField] private TextMeshProUGUI txtHoldToSendBallsObj;
     [SerializeField] private TextMeshProUGUI txtBallCount;
     [SerializeField] private TextMeshProUGUI txtWallet;
     [SerializeField] private TextMeshProUGUI txtResetTimer;
@@ -32,35 +32,39 @@ public class GameManager : MonoBehaviour
 
     [Header("Game State")]
     [SerializeField] private GameState currentState = GameState.Idle;
-    private int currentBallCount = 0;
 
-    [Header("Level Info")]
+    private int currentBallCount;
     private int currentLevel = 1;
     private int maxLevel;
 
-    [Header("Level End Settings")]
-    private float levelEndDelay = 0f;
-    private Coroutine holdHintCoroutine;
-    private float holdHintDelay = 5f;
-
-    private int initialBalls;
-
-    // 🔹 NEW SYSTEM
+    private int roundScore = 0;
     private int ballsScoredThisLevel = 0;
     private int ballsRequiredForLevel = 0;
 
-    private void Start()
+    private Coroutine holdHintCoroutine;
+    private float holdHintDelay = 5f;
+
+    // 🔒 Restore sırasında server'a state yazmayı geçici durdurmak için
+    private bool isRestoring = false;
+
+    // -------------------------------------------------------------
+    // UNITY
+    // -------------------------------------------------------------
+    private async void Start()
     {
         InitUI();
-        LoadLevelData(currentLevel);
-        StartCoroutine(UpdateResetCountdown());
-        DetectMaxLevel();
 
-        if (RewardValidator.Instance != null)
-        {
-            RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
-            UpdateWalletUI(RewardValidator.Instance.LocalWallet);
-        }
+        RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
+
+        int wallet = await MockServerService.Instance.GetWalletAsync();
+        RewardValidator.Instance.SyncWalletFromServer(wallet);
+
+        isRestoring = true;
+        await TryRestoreFromServer();
+        isRestoring = false;
+
+        DetectMaxLevel();
+        StartCoroutine(UpdateResetCountdown());
     }
 
     private void OnEnable()
@@ -69,13 +73,10 @@ public class GameManager : MonoBehaviour
         GameEvents.OnHoldStart += HandleHoldStart;
         GameEvents.OnHoldEnd += HandleHoldEnd;
         GameEvents.OnBallCountChanged += HandleBallCountChanged;
+        GameEvents.OnBallScored += HandleRoundScore;
+        GameEvents.OnLevelStarted += HandleLevelStarted;
         GameEvents.OnLevelCompleted += HandleLevelCompleted;
         GameEvents.OnGameReset += HandleGameReset;
-        GameEvents.OnLevelStarted += HandleLevelStarted;
-        GameEvents.OnBallScored += HandleRoundScore;
-
-        if (RewardValidator.Instance != null)
-            RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
     }
 
     private void OnDisable()
@@ -84,17 +85,17 @@ public class GameManager : MonoBehaviour
         GameEvents.OnHoldStart -= HandleHoldStart;
         GameEvents.OnHoldEnd -= HandleHoldEnd;
         GameEvents.OnBallCountChanged -= HandleBallCountChanged;
+        GameEvents.OnBallScored -= HandleRoundScore;
+        GameEvents.OnLevelStarted -= HandleLevelStarted;
         GameEvents.OnLevelCompleted -= HandleLevelCompleted;
         GameEvents.OnGameReset -= HandleGameReset;
-        GameEvents.OnLevelStarted -= HandleLevelStarted;
-        GameEvents.OnBallScored -= HandleRoundScore;
 
         if (RewardValidator.Instance != null)
             RewardValidator.Instance.OnWalletUpdated -= UpdateWalletUI;
     }
 
     // -------------------------------------------------------------
-    // UI INIT
+    // INIT
     // -------------------------------------------------------------
     private void InitUI()
     {
@@ -103,10 +104,46 @@ public class GameManager : MonoBehaviour
         txtPressToStart.gameObject.SetActive(true);
         HoldToSendBallsObj.SetActive(false);
 
-        txtResetTimer.text = "--:--";
         txtBallCount.text = "Balls: 0";
         txtScore.text = "Score: 0";
         txtWallet.text = "Wallet: --";
+        txtResetTimer.text = "--:--";
+    }
+
+    // -------------------------------------------------------------
+    // SERVER RESTORE
+    // -------------------------------------------------------------
+    private async Task TryRestoreFromServer()
+    {
+        PlayerData data = await MockServerService.Instance.GetPlayerDataAsync();
+
+        if (data == null)
+        {
+            currentLevel = 1;
+            roundScore = 0;
+            txtScore.text = "Score: 0";
+
+            LoadLevelData(currentLevel);
+            GameEvents.TriggerBallCountRestore(200); // fallback
+            return;
+        }
+
+        currentLevel = Mathf.Max(1, data.savedLevel);
+        roundScore = Mathf.Max(0, data.savedRoundScore);
+        txtScore.text = "Score: " + roundScore;
+
+        LoadLevelData(currentLevel);
+        GameEvents.TriggerBallCountRestore(data.savedTotalBallsRemaining);
+        ReplayHistory(data.sessionRewards);
+    }
+
+
+    private void ReplayHistory(System.Collections.Generic.List<RewardPackage> rewards)
+    {
+        if (rewards == null) return;
+
+        foreach (var reward in rewards)
+            GameEvents.TriggerBallScored(reward.bucketScore);
     }
 
     // -------------------------------------------------------------
@@ -117,7 +154,6 @@ public class GameManager : MonoBehaviour
         if (currentState == GameState.Idle)
         {
             SetState(GameState.Playing);
-
             txtPressToStart.gameObject.SetActive(false);
             StartHoldHintTimer();
         }
@@ -128,34 +164,170 @@ public class GameManager : MonoBehaviour
         }
     }
 
-
-
     private void HandleHoldStart()
     {
-        if (currentState != GameState.Playing)
-            return;
-
+        if (currentState != GameState.Playing) return;
         HoldToSendBallsObj.SetActive(false);
         StopHoldHintTimer();
     }
+
     private void HandleHoldEnd()
     {
-        if (currentState != GameState.Playing)
-            return;
-
-        if (currentBallCount <= 0)
-        {
-            HoldToSendBallsObj.SetActive(false);
-            StopHoldHintTimer();
-            return;
-        }
-
+        if (currentState != GameState.Playing) return;
+        if (currentBallCount <= 0) return;
         StartHoldHintTimer();
     }
 
+    // -------------------------------------------------------------
+    // BALL COUNT → SERVER
+    // -------------------------------------------------------------
+    private void HandleBallCountChanged(int count)
+    {
+        currentBallCount = count;
+        txtBallCount.text = "Balls: " + count;
+
+        if (isRestoring) return;
+
+        MockServerService.Instance?.ReportGameState(
+            currentLevel,
+            currentBallCount,
+            roundScore
+        );
+    }
 
     // -------------------------------------------------------------
-    // WALLET / SCORE
+    // SCORE → SERVER
+    // -------------------------------------------------------------
+    private void HandleRoundScore(int amount)
+    {
+        roundScore += amount;
+        txtScore.text = "Score: " + roundScore;
+        ballsScoredThisLevel++;
+
+        if (!isRestoring)
+        {
+            MockServerService.Instance?.ReportGameState(
+                currentLevel,
+                currentBallCount,
+                roundScore
+            );
+        }
+
+        if (ballsScoredThisLevel >= ballsRequiredForLevel &&
+            currentState == GameState.Playing)
+        {
+            StopHoldHintTimer();
+            StartCoroutine(LevelEndRoutine());
+        }
+    }
+
+    // -------------------------------------------------------------
+    // LEVEL
+    // -------------------------------------------------------------
+    private void LoadLevelData(int level)
+    {
+        string path = Path.Combine(Application.streamingAssetsPath, $"Levels/level_{level}.json");
+        if (!File.Exists(path)) return;
+
+        string json = File.ReadAllText(path);
+        LevelData data = JsonUtility.FromJson<LevelData>(json);
+
+        ballsRequiredForLevel = data.ballsRequiredForLevel;
+        ballsScoredThisLevel = 0;
+
+        GameEvents.TriggerLevelDataLoaded(data);
+        GameEvents.TriggerLevelStarted(level);
+    }
+
+    private void DetectMaxLevel()
+    {
+        string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
+        if (!Directory.Exists(dir)) return;
+
+        maxLevel = Directory.GetFiles(dir, "level_*.json").Length;
+    }
+
+    private void HandleLevelStarted(int level)
+    {
+        currentLevel = level;
+        SetState(GameState.Idle);
+
+        txtLevel.text = "Level: " + level;
+        HoldToSendBallsObj.SetActive(false);
+
+        // ❗ LevelStarted'ta server'a state yazmıyoruz.
+        // Çünkü restore sırasında currentBallCount henüz 0 olabiliyor ve kaydı eziyor.
+    }
+
+    private IEnumerator LevelEndRoutine()
+    {
+        SetState(GameState.LevelEnd);
+        yield return null;
+
+        RewardValidator.Instance?.FlushPendingRewards();
+        GameEvents.TriggerLevelCompleted();
+    }
+
+    private void HandleLevelCompleted()
+    {
+        currentLevel++;
+        if (currentLevel > maxLevel)
+            currentLevel = maxLevel;
+
+        LoadLevelData(currentLevel);
+        SetState(GameState.Idle);
+    }
+
+    // -------------------------------------------------------------
+    // RESET
+    // -------------------------------------------------------------
+    private async void HandleGameReset()
+    {
+        SetState(GameState.Reset);
+
+        txtPressToStart.gameObject.SetActive(true);
+        HoldToSendBallsObj.SetActive(false);
+
+        roundScore = 0;
+        txtScore.text = "Score: 0";
+
+        await MockServerService.Instance.PerformHardResetAsync();
+
+        int wallet = await MockServerService.Instance.GetWalletAsync();
+        RewardValidator.Instance?.SyncWalletFromServer(wallet);
+
+        currentLevel = 1;
+        LoadLevelData(currentLevel);
+    }
+
+    // -------------------------------------------------------------
+    // HOLD HINT
+    // -------------------------------------------------------------
+    private void StartHoldHintTimer()
+    {
+        StopHoldHintTimer();
+        if (currentBallCount <= 0 || currentState != GameState.Playing) return;
+        holdHintCoroutine = StartCoroutine(HoldHintRoutine());
+    }
+
+    private void StopHoldHintTimer()
+    {
+        if (holdHintCoroutine != null)
+        {
+            StopCoroutine(holdHintCoroutine);
+            holdHintCoroutine = null;
+        }
+    }
+
+    private IEnumerator HoldHintRoutine()
+    {
+        yield return new WaitForSeconds(holdHintDelay);
+        if (currentBallCount > 0 && currentState == GameState.Playing)
+            HoldToSendBallsObj.SetActive(true);
+    }
+
+    // -------------------------------------------------------------
+    // WALLET UI
     // -------------------------------------------------------------
     private Coroutine walletAnimRoutine;
     private float walletAnimDuration = 0.35f;
@@ -170,203 +342,19 @@ public class GameManager : MonoBehaviour
 
     private IEnumerator AnimateWallet(int targetValue)
     {
-        int startValue = 0;
-        if (int.TryParse(txtWallet.text.Replace("Wallet:", "").Trim(), out int current))
-            startValue = current;
-
+        int.TryParse(txtWallet.text.Replace("Wallet:", ""), out int startValue);
         float elapsed = 0f;
+
         while (elapsed < walletAnimDuration)
         {
             elapsed += Time.deltaTime;
-            float t = Mathf.SmoothStep(0f, 1f, elapsed / walletAnimDuration);
-            int value = Mathf.RoundToInt(Mathf.Lerp(startValue, targetValue, t));
+            int value = Mathf.RoundToInt(Mathf.Lerp(startValue, targetValue, elapsed / walletAnimDuration));
             txtWallet.text = $"Wallet: {value}";
             yield return null;
         }
 
         txtWallet.text = $"Wallet: {targetValue}";
     }
-
-    private int roundScore = 0;
-    private void HandleRoundScore(int amount)
-    {
-        roundScore += amount;
-        txtScore.text = "Score: " + roundScore;
-
-        ballsScoredThisLevel++;
-
-        if (ballsScoredThisLevel >= ballsRequiredForLevel &&
-            currentState == GameState.Playing)
-        {
-            StopHoldHintTimer();
-            StartCoroutine(LevelEndRoutine());
-        }
-    }
-
-
-    // -------------------------------------------------------------
-    // BALL COUNT (LEVEL END REMOVED FROM HERE)
-    // -------------------------------------------------------------
-    private void HandleBallCountChanged(int count)
-    {
-        currentBallCount = count;
-        txtBallCount.text = "Balls: " + count;
-    }
-
-    // -------------------------------------------------------------
-    // HOLD HINT
-    // -------------------------------------------------------------
-    private void StartHoldHintTimer()
-    {
-        StopHoldHintTimer();
-        if (currentBallCount <= 0 || currentState != GameState.Playing)
-            return;
-        holdHintCoroutine = StartCoroutine(HoldHintRoutine());
-    }
-
-
-    private void StopHoldHintTimer()
-    {
-        if (holdHintCoroutine != null)
-        {
-            StopCoroutine(holdHintCoroutine);
-            holdHintCoroutine = null;
-        }
-    }
-
-    private IEnumerator HoldHintRoutine()
-    {
-        yield return new WaitForSeconds(holdHintDelay);
-
-        if (currentBallCount > 0 && currentState == GameState.Playing)
-            HoldToSendBallsObj.SetActive(true);
-    }
-
-
-    // -------------------------------------------------------------
-    // LEVEL LOAD
-    // -------------------------------------------------------------
-    private void LoadLevelData(int level)
-    {
-        string path = Path.Combine(Application.streamingAssetsPath, $"Levels/level_{level}.json");
-
-        if (!File.Exists(path))
-        {
-            Debug.LogError("LEVEL DATA NOT FOUND: " + path);
-            return;
-        }
-
-        string json = File.ReadAllText(path);
-        LevelData data = JsonUtility.FromJson<LevelData>(json);
-
-        ballsRequiredForLevel = data.ballsRequiredForLevel;
-        ballsScoredThisLevel = 0;
-
-        GameEvents.TriggerLevelDataLoaded(data);
-        GameEvents.TriggerLevelStarted(level);
-    }
-
-    public int GetBallsRequiredForLevel()
-    {
-        return ballsRequiredForLevel;
-    }
-
-    private void DetectMaxLevel()
-    {
-        string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
-        if (!Directory.Exists(dir)) return;
-
-        string[] files = Directory.GetFiles(dir, "level_*.json");
-        maxLevel = files.Length;
-    }
-
-    private void HandleLevelStarted(int level)
-    {
-        SetState(GameState.Idle);
-
-        txtLevel.text = "Level: " + level;
-        HoldToSendBallsObj.SetActive(false);
-    }
-
-
-    // -------------------------------------------------------------
-    // LEVEL END
-    // -------------------------------------------------------------
-    private IEnumerator LevelEndRoutine()
-    {
-        SetState(GameState.LevelEnd);
-
-        yield return new WaitForSeconds(levelEndDelay);
-
-        if (RewardValidator.Instance != null)
-            RewardValidator.Instance.FlushPendingRewards();
-
-        GameEvents.TriggerLevelCompleted();
-    }
-
-    private void HandleLevelCompleted()
-    {
-        SaveEndOfGameData();
-
-        currentLevel++;
-        if (currentLevel > maxLevel)
-            currentLevel = maxLevel;
-
-        LoadLevelData(currentLevel);
-
-        HoldToSendBallsObj.SetActive(false);
-        currentState = GameState.Idle;
-    }
-
-
-    private void SaveEndOfGameData()
-    {
-        PlayerSessionData session = new PlayerSessionData()
-        {
-            date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-            levelId = currentLevel,
-            ballUsed = 0,
-            moneyEarned = 0
-        };
-
-        PlayerDataManager.Instance.AddSession(session);
-    }
-
-    // -------------------------------------------------------------
-    // RESET
-    // -------------------------------------------------------------
-    private async void HandleGameReset()
-    {
-        SetState(GameState.Reset);
-
-        txtPressToStart.gameObject.SetActive(true);
-        HoldToSendBallsObj.SetActive(false);
-
-        int earnedThisSession = roundScore;
-        roundScore = 0;
-        txtScore.text = "Score: 0";
-
-        if (MockServerService.Instance != null)
-            await MockServerService.Instance.NotifyClientResetAsync(earnedThisSession);
-
-        if (RewardValidator.Instance != null)
-        {
-            int wallet = await MockServerService.Instance.GetWalletAsync();
-            RewardValidator.Instance.SyncWalletFromServer(wallet);
-        }
-
-        PlayerDataManager.Instance.AddSession(new PlayerSessionData
-        {
-            date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-            levelId = currentLevel,
-            ballUsed = 0,
-            moneyEarned = earnedThisSession
-        });
-
-        currentLevel = 1;
-        LoadLevelData(currentLevel);
-    }
-
 
     // -------------------------------------------------------------
     // TIMER
@@ -390,28 +378,25 @@ public class GameManager : MonoBehaviour
         }
 
         System.DateTime lastReset = System.DateTime.Parse(lastResetStr);
-        System.DateTime nextReset = lastReset.AddMinutes(15);
-        System.TimeSpan diff = nextReset - System.DateTime.UtcNow;
+        System.TimeSpan diff = lastReset.AddMinutes(15) - System.DateTime.UtcNow;
 
-        if (diff.TotalSeconds <= 0)
-        {
-            txtResetTimer.text = "00:00";
-            return;
-        }
-
-        txtResetTimer.text = $"{diff.Minutes:00}:{diff.Seconds:00}";
+        txtResetTimer.text = diff.TotalSeconds <= 0
+            ? "00:00"
+            : $"{diff.Minutes:00}:{diff.Seconds:00}";
     }
 
     // -------------------------------------------------------------
-    // State
+    // STATE
     // -------------------------------------------------------------
-
     private void SetState(GameState newState)
     {
-        if (currentState == newState)
-            return;
-
+        if (currentState == newState) return;
         currentState = newState;
         GameEvents.TriggerGameStateChanged(currentState);
+    }
+
+    public int GetBallsRequiredForLevel()
+    {
+        return ballsRequiredForLevel;
     }
 }

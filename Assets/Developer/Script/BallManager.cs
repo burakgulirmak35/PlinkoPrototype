@@ -21,12 +21,14 @@ namespace PlinkoPrototype
         }
         #endregion
 
+        // ------------------------------------------------
+        // SETTINGS
+        // ------------------------------------------------
         [Header("Ball Settings")]
         [SerializeField] private Transform fakeBall;
         [SerializeField] private GameObject ballPrefab;
         [SerializeField] private Transform ballPoolParent;
 
-        [SerializeField] private int initialBallCount = 200;
         [SerializeField] private int poolSize = 50;
 
         [Header("Spawn Settings")]
@@ -34,6 +36,9 @@ namespace PlinkoPrototype
         [SerializeField] private float spawnInterval = 0.1f;
         [SerializeField] private float spawnYOffset = 2f;
 
+        // ------------------------------------------------
+        // STATE
+        // ------------------------------------------------
         private readonly Queue<PlinkoBall> ballPool = new Queue<PlinkoBall>();
         private int availableBalls;
         private Coroutine spawnRoutine;
@@ -44,13 +49,15 @@ namespace PlinkoPrototype
         private float sideForce = 0.5f;
         private int ballIdCounter = 0;
 
+        private GameState currentState;
+
         // ------------------------------------------------
         // LIFECYCLE
         // ------------------------------------------------
         private void Start()
         {
             CreatePool();
-            ResetBallAvailability();
+            // ❗ Burada TOP SET ETMİYORUZ
         }
 
         private void OnEnable()
@@ -58,8 +65,11 @@ namespace PlinkoPrototype
             GameEvents.OnHoldStart += StartSpawning;
             GameEvents.OnHoldEnd += StopSpawning;
             GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
-            GameEvents.OnGameReset += HandleGameReset;
             GameEvents.OnGameStateChanged += HandleGameStateChanged;
+
+            // 🔥 TEK GERÇEK KAYNAK
+            GameEvents.OnBallCountRestore += ApplyBallCountFromServer;
+            GameEvents.OnGameReset += HandleGameReset;
         }
 
         private void OnDisable()
@@ -67,17 +77,29 @@ namespace PlinkoPrototype
             GameEvents.OnHoldStart -= StartSpawning;
             GameEvents.OnHoldEnd -= StopSpawning;
             GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
-            GameEvents.OnGameReset -= HandleGameReset;
             GameEvents.OnGameStateChanged -= HandleGameStateChanged;
+
+            GameEvents.OnBallCountRestore -= ApplyBallCountFromServer;
+            GameEvents.OnGameReset -= HandleGameReset;
         }
 
         // ------------------------------------------------
-        // RESET
+        // BALL COUNT (SERVER DRIVEN)
         // ------------------------------------------------
+        private void ApplyBallCountFromServer(int count)
+        {
+            availableBalls = Mathf.Max(0, count);
+            GameEvents.TriggerBallCountChanged(availableBalls);
+
+            Debug.Log($"[BALL] Applied from server: {availableBalls}");
+        }
+
         private void HandleGameReset()
         {
+            // Reset event’i zaten server 200 ile gönderir
+            // burada ekstra set yok
+            StopSpawning();
             StopFakeBall();
-            ResetBallAvailability();
         }
 
         // ------------------------------------------------
@@ -89,15 +111,10 @@ namespace PlinkoPrototype
             {
                 PlinkoBall ball = Instantiate(ballPrefab, ballPoolParent)
                     .GetComponent<PlinkoBall>();
+
                 ball.gameObject.SetActive(false);
                 ballPool.Enqueue(ball);
             }
-        }
-
-        private void ResetBallAvailability()
-        {
-            availableBalls = initialBallCount;
-            GameEvents.TriggerBallCountChanged(availableBalls);
         }
 
         private PlinkoBall GetBallFromPool()
@@ -107,6 +124,7 @@ namespace PlinkoPrototype
 
             PlinkoBall ball = Instantiate(ballPrefab, ballPoolParent)
                 .GetComponent<PlinkoBall>();
+
             ball.gameObject.SetActive(false);
             return ball;
         }
@@ -137,7 +155,6 @@ namespace PlinkoPrototype
             if (spawnRoutine == null && availableBalls > 0)
                 spawnRoutine = StartCoroutine(SpawnRoutine());
         }
-
 
         private void StopSpawning()
         {
@@ -210,11 +227,10 @@ namespace PlinkoPrototype
         // ------------------------------------------------
         private Tween fakeBallTween;
         private float fakeBallDuration = 5f;
-
         private bool isLoopingFakeBall = false;
+
         private void StartFakeBall()
         {
-
             if (isLoopingFakeBall) return;
             isLoopingFakeBall = true;
 
@@ -242,10 +258,9 @@ namespace PlinkoPrototype
             fakeBall.gameObject.SetActive(false);
         }
 
-        // -------------------------------------------------------------
-        // State
-        // -------------------------------------------------------------
-        private GameState currentState;
+        // ------------------------------------------------
+        // GAME STATE
+        // ------------------------------------------------
         private void HandleGameStateChanged(GameState state)
         {
             currentState = state;

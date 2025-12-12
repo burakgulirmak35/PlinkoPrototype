@@ -1,9 +1,12 @@
+using System;
 using System.IO;
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 using PlinkoPrototype;
 
-[System.Serializable]
+#region DATA MODELS
+
+[Serializable]
 public class PlayerSessionData
 {
     public string date;
@@ -12,28 +15,40 @@ public class PlayerSessionData
     public int moneyEarned;
 }
 
-[System.Serializable]
+[Serializable]
 public class PlayerData
 {
-    public int savedLevel;
-    public int savedRoundScore;
-    public int savedTotalBallsRemaining;
-    public int savedBallsScoredThisLevel;
+    public int savedLevel = 1;
+    public int savedRoundScore = 0;
+
+    // 🔥 0 OLMAMALI
+    public int savedTotalBallsRemaining = 200;
+
+    public int savedBallsScoredThisLevel = 0;
     public int totalMoney = 0;
+
+    // 🔥 Top bazlı history
+    public List<RewardPackage> sessionRewards = new List<RewardPackage>();
     public List<PlayerSessionData> sessionHistory = new List<PlayerSessionData>();
+
     public string lastResetUtc;
 }
+
+#endregion
 
 public class PlayerDataManager : MonoBehaviour
 {
     public static PlayerDataManager Instance { get; private set; }
 
-    private string filePath;
     public PlayerData Data { get; private set; }
+
+    private string filePath;
+
+    private const int DEFAULT_BALL_COUNT = 200;
 
     private void Awake()
     {
-        if (Instance != null)
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
@@ -43,61 +58,61 @@ public class PlayerDataManager : MonoBehaviour
         DontDestroyOnLoad(gameObject);
 
         filePath = Path.Combine(Application.persistentDataPath, "player_data.json");
-        LoadPlayerData();
-        CheckForAutoReset();
+        Debug.Log("savepath: " + filePath);
+
+        LoadOrCreate();
     }
 
-    private void LoadPlayerData()
+    private void LoadOrCreate()
     {
         if (!File.Exists(filePath))
         {
-            // İlk defa açılıyorsa default oluştur
-            Data = new PlayerData();
-            SavePlayerData();
+            CreateFreshData();
             return;
         }
 
         string json = File.ReadAllText(filePath);
         Data = JsonUtility.FromJson<PlayerData>(json);
-    }
+        bool fixedSomething = false;
 
-    public void SavePlayerData()
-    {
-        string json = JsonUtility.ToJson(Data, true);
-        File.WriteAllText(filePath, json);
-    }
+        if (Data.savedLevel <= 0)
+        {
+            Data.savedLevel = 1;
+            fixedSomething = true;
+        }
 
-    public void AddMoney(int amount)
-    {
-        Data.totalMoney += amount;
-        SavePlayerData();
-    }
-
-    public void AddSession(PlayerSessionData session)
-    {
-        Data.sessionHistory.Add(session);
-        SavePlayerData();
-    }
-
-    private const int RESET_INTERVAL_MINUTES = 15;
-
-    private void CheckForAutoReset()
-    {
         if (string.IsNullOrEmpty(Data.lastResetUtc))
         {
             Data.lastResetUtc = System.DateTime.UtcNow.ToString("o");
-            SavePlayerData();
-            return;
+            fixedSomething = true;
         }
 
-        System.DateTime lastReset = System.DateTime.Parse(Data.lastResetUtc);
-        System.DateTime now = System.DateTime.UtcNow;
-
-        if ((now - lastReset).TotalMinutes >= RESET_INTERVAL_MINUTES)
+        if (fixedSomething)
         {
-            Data.lastResetUtc = now.ToString("o");
-            SavePlayerData();
-            GameEvents.TriggerGameReset();
+            Save();
         }
+    }
+
+    private void CreateFreshData()
+    {
+        Data = new PlayerData
+        {
+            savedLevel = 1,
+            savedRoundScore = 0,
+            savedTotalBallsRemaining = DEFAULT_BALL_COUNT,
+            savedBallsScoredThisLevel = 0,
+            totalMoney = 0,
+            lastResetUtc = System.DateTime.UtcNow.ToString("o")
+        };
+
+        Save();
+
+        Debug.Log("[PlayerData] Fresh data created with 200 balls.");
+    }
+
+    public void Save()
+    {
+        string json = JsonUtility.ToJson(Data, true);
+        File.WriteAllText(filePath, json);
     }
 }
