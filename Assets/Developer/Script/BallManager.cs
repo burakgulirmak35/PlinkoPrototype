@@ -26,6 +26,7 @@ namespace PlinkoPrototype
 
         [SerializeField] private int initialBallCount = 200;
         [SerializeField] private int poolSize = 50;
+
         [Header("Spawn Settings")]
         [SerializeField] private float spawnForce = 2f;
         [SerializeField] private float spawnInterval = 0.1f;
@@ -41,21 +42,28 @@ namespace PlinkoPrototype
         private float sideForce = 0.5f;
         private float spawnYOffset = 5f;
 
+        /// <summary>
+        /// Her top spawn olduğunda bir artırılır.
+        /// Benzersiz top kimliği (BallId) böyle üretilir.
+        /// </summary>
+        private int ballIdCounter = 0;
+
         private void Start()
         {
             CreatePool();
             ResetBallAvailability();
         }
 
-        #region Event Subscriptions
-
+        // ------------------------------------------
+        // EVENT SUBSCRIPTIONS
+        // ------------------------------------------
         private void OnEnable()
         {
             GameEvents.OnHoldStart += StartSpawning;
             GameEvents.OnHoldEnd += StopSpawning;
             GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
 
-            GameEvents.OnLevelDataLoaded += ApplyLevelData;   // 🔥 yeni eklendi
+            GameEvents.OnLevelDataLoaded += ApplyLevelData;
         }
 
         private void OnDisable()
@@ -69,17 +77,13 @@ namespace PlinkoPrototype
 
         private void ApplyLevelData(LevelData data)
         {
-            // Yeni levelde top hakkını JSON’dan al
             initialBallCount = data.ballCount;
-
-            // Yeni level başında top sayısını resetle
             ResetBallAvailability();
         }
 
-        #endregion
-
-        #region Pool Creation
-
+        // ------------------------------------------
+        // POOL
+        // ------------------------------------------
         private void CreatePool()
         {
             int count = Mathf.Max(poolSize, 1);
@@ -94,7 +98,6 @@ namespace PlinkoPrototype
             Debug.Log($"[BallManager] Created pool with {count} balls.");
         }
 
-        // 🔥 Level başında top hakkını sıfırlar
         private void ResetBallAvailability()
         {
             availableBalls = initialBallCount;
@@ -126,10 +129,9 @@ namespace PlinkoPrototype
             return availableBalls;
         }
 
-        #endregion
-
-        #region Ball Spawning
-
+        // ------------------------------------------
+        // SPAWNING
+        // ------------------------------------------
         public void SpawnBall()
         {
             if (availableBalls <= 0)
@@ -141,6 +143,10 @@ namespace PlinkoPrototype
             float randomY = Random.Range(spawnMin.y, spawnMax.y);
 
             ball.transform.position = new Vector2(randomX, randomY);
+
+            // 🔥 Benzersiz Ball ID ataması
+            ball.BallId = ++ballIdCounter;
+
             ball.transform.rotation = Quaternion.identity;
             ball.gameObject.SetActive(true);
 
@@ -180,10 +186,9 @@ namespace PlinkoPrototype
             }
         }
 
-        #endregion
-
-        #region Spawn Area Update
-
+        // ------------------------------------------
+        // SPAWN AREA UPDATE
+        // ------------------------------------------
         private void UpdateSpawnAreaFromLevel(List<Vector2> topRow)
         {
             if (topRow == null || topRow.Count < 2)
@@ -196,7 +201,5 @@ namespace PlinkoPrototype
             spawnMin = new Vector2(minX, y);
             spawnMax = new Vector2(maxX, y);
         }
-
-        #endregion
     }
 }

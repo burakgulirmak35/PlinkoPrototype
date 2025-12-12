@@ -24,17 +24,18 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtPressToStart;
     [SerializeField] private TextMeshProUGUI txtHoldToSendBalls;
     [SerializeField] private TextMeshProUGUI txtBallCount;
-    [SerializeField] private TextMeshProUGUI txtScore;
+    [SerializeField] private TextMeshProUGUI txtWallet;
     [SerializeField] private TextMeshProUGUI txtResetTimer;
+    [SerializeField] private TextMeshProUGUI txtLevel;
+    [SerializeField] private TextMeshProUGUI txtScore;
 
     [Header("Game State")]
-    private int currentScore = 0;
-    private int currentBallCount = 0;
     private bool isStarted = false;
+    private int currentBallCount = 0;
 
     [Header("Level Info")]
-
     private int currentLevel = 1;
+    private int maxLevel;
 
     [Header("Level End Settings")]
     private bool isLevelEnding = false;
@@ -43,13 +44,51 @@ public class GameManager : MonoBehaviour
     private Coroutine holdHintCoroutine;
     private float holdHintDelay = 5f;
 
+    private int initialBalls;
+
     private void Start()
     {
         InitUI();
         LoadLevelData(currentLevel);
-        UpdateScoreUI();
         StartCoroutine(UpdateResetCountdown());
         DetectMaxLevel();
+
+        // 🔥 Başlangıçta wallet UI'yi server state ile senkronla
+        if (RewardValidator.Instance != null)
+        {
+            RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
+            UpdateWalletUI(RewardValidator.Instance.LocalWallet);
+        }
+    }
+
+    private void OnEnable()
+    {
+        GameEvents.OnTapStart += HandleTapStart;
+        GameEvents.OnHoldStart += HandleHoldStart;
+        GameEvents.OnHoldEnd += HandleHoldEnd;
+        GameEvents.OnBallCountChanged += HandleBallCountChanged;
+        GameEvents.OnLevelCompleted += HandleLevelCompleted;
+        GameEvents.OnGameReset += HandleGameReset;
+        GameEvents.OnLevelStarted += HandleLevelStarted;
+        GameEvents.OnBallScored += HandleRoundScore;
+
+        if (RewardValidator.Instance != null)
+            RewardValidator.Instance.OnWalletUpdated += UpdateWalletUI;
+    }
+
+    private void OnDisable()
+    {
+        GameEvents.OnTapStart -= HandleTapStart;
+        GameEvents.OnHoldStart -= HandleHoldStart;
+        GameEvents.OnHoldEnd -= HandleHoldEnd;
+        GameEvents.OnBallCountChanged -= HandleBallCountChanged;
+        GameEvents.OnLevelCompleted -= HandleLevelCompleted;
+        GameEvents.OnGameReset -= HandleGameReset;
+        GameEvents.OnLevelStarted -= HandleLevelStarted;
+        GameEvents.OnBallScored -= HandleRoundScore;
+
+        if (RewardValidator.Instance != null)
+            RewardValidator.Instance.OnWalletUpdated -= UpdateWalletUI;
     }
 
     // -------------------------------------------------------------
@@ -58,7 +97,6 @@ public class GameManager : MonoBehaviour
     private void InitUI()
     {
         isStarted = false;
-        currentScore = 0;
 
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
@@ -66,33 +104,7 @@ public class GameManager : MonoBehaviour
         txtResetTimer.text = "--:--";
         txtBallCount.text = "Balls: 0";
         txtScore.text = "Score: 0";
-    }
-
-    // -------------------------------------------------------------
-    // EVENT SUBSCRIPTIONS
-    // -------------------------------------------------------------
-    private void OnEnable()
-    {
-        GameEvents.OnTapStart += HandleTapStart;
-        GameEvents.OnHoldStart += HandleHoldStart;
-        GameEvents.OnHoldEnd += HandleHoldEnd;
-        GameEvents.OnBallScored += HandleBallScored;
-        GameEvents.OnBallCountChanged += HandleBallCountChanged;
-        GameEvents.OnLevelCompleted += HandleLevelCompleted;
-        GameEvents.OnGameReset += HandleGameReset;
-        GameEvents.OnLevelStarted += HandleLevelStarted;
-    }
-
-    private void OnDisable()
-    {
-        GameEvents.OnTapStart -= HandleTapStart;
-        GameEvents.OnHoldStart -= HandleHoldStart;
-        GameEvents.OnHoldEnd -= HandleHoldEnd;
-        GameEvents.OnBallScored -= HandleBallScored;
-        GameEvents.OnBallCountChanged -= HandleBallCountChanged;
-        GameEvents.OnLevelCompleted -= HandleLevelCompleted;
-        GameEvents.OnGameReset -= HandleGameReset;
-        GameEvents.OnLevelStarted -= HandleLevelStarted;
+        txtWallet.text = "Wallet: --";
     }
 
     // -------------------------------------------------------------
@@ -133,23 +145,59 @@ public class GameManager : MonoBehaviour
     }
 
     // -------------------------------------------------------------
-    // SCORE / UI UPDATES
+    // WALLET
     // -------------------------------------------------------------
-    private void HandleBallScored(int amount)
+    private Coroutine walletAnimRoutine;
+    private float walletAnimDuration = 0.35f;
+
+    private void UpdateWalletUI(int wallet)
     {
-        currentScore += amount;
-        UpdateScoreUI();
+        if (walletAnimRoutine != null)
+            StopCoroutine(walletAnimRoutine);
+
+        walletAnimRoutine = StartCoroutine(AnimateWallet(wallet));
     }
 
-    private void UpdateScoreUI()
+    private IEnumerator AnimateWallet(int targetValue)
     {
-        txtScore.text = "Score: " + currentScore.ToString();
+        int startValue = 0;
+
+        // Mevcut UI'daki sayıyı çöz (örneğin "Wallet: 120" → 120)
+        if (int.TryParse(txtWallet.text.Replace("Wallet:", "").Trim(), out int current))
+            startValue = current;
+
+        float elapsed = 0f;
+
+        while (elapsed < walletAnimDuration)
+        {
+            elapsed += Time.deltaTime;
+
+            float t = elapsed / walletAnimDuration;
+            t = Mathf.SmoothStep(0f, 1f, t);
+
+            int value = Mathf.RoundToInt(Mathf.Lerp(startValue, targetValue, t));
+            txtWallet.text = $"Wallet: {value}";
+
+            yield return null;
+        }
+
+        txtWallet.text = $"Wallet: {targetValue}";
     }
 
+    private int roundScore = 0;
+    private void HandleRoundScore(int amount)
+    {
+        roundScore += amount;
+        txtScore.text = "Score: " + roundScore;
+    }
+
+    // -------------------------------------------------------------
+    // BALL COUNT
+    // -------------------------------------------------------------
     private void HandleBallCountChanged(int count)
     {
         currentBallCount = count;
-        txtBallCount.text = "Balls: " + count.ToString();
+        txtBallCount.text = "Balls: " + count;
 
         if (count <= 0 && !isLevelEnding)
         {
@@ -191,8 +239,6 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     // LEVEL LOADING
     // -------------------------------------------------------------
-
-    private int initialBalls;
     private void LoadLevelData(int level)
     {
         string path = Path.Combine(Application.streamingAssetsPath, $"Levels/level_{level}.json");
@@ -209,12 +255,9 @@ public class GameManager : MonoBehaviour
         initialBalls = data.ballCount;
         GameEvents.TriggerLevelDataLoaded(data);
 
-        // 🆕 Level load işlemi tamamlandı → LevelStarted event’i gönderiyoruz
         GameEvents.TriggerLevelStarted(level);
     }
 
-
-    private int maxLevel;
     private void DetectMaxLevel()
     {
         string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
@@ -227,33 +270,31 @@ public class GameManager : MonoBehaviour
 
         string[] files = Directory.GetFiles(dir, "level_*.json");
         maxLevel = files.Length;
-
-        Debug.Log("Detected Levels: " + maxLevel);
     }
 
     private void HandleLevelStarted(int level)
     {
-        currentScore = 0;
-        txtScore.text = "Score: 0";
+        txtLevel.text = "Level: " + level;
 
         txtBallCount.text = "Balls: " + initialBalls;
-
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
 
         isStarted = false;
     }
 
-
     // -------------------------------------------------------------
-    // LEVEL END → EVENT DRIVEN COMPLETION
+    // LEVEL END
     // -------------------------------------------------------------
     private IEnumerator LevelEndRoutine()
     {
         isLevelEnding = true;
 
-        Debug.Log("Balls finished. Ending level in 5 seconds...");
         yield return new WaitForSeconds(levelEndDelay);
+
+        // Pending reward batch varsa server'a gönder
+        if (RewardValidator.Instance != null)
+            RewardValidator.Instance.FlushPendingRewards();
 
         GameEvents.TriggerLevelCompleted();
     }
@@ -268,50 +309,63 @@ public class GameManager : MonoBehaviour
 
         LoadLevelData(currentLevel);
 
-        ResetUIForNewLevel();
-
-        isLevelEnding = false;
-    }
-
-
-    private void ResetUIForNewLevel()
-    {
-        currentScore = 0;
-        UpdateScoreUI();
-
         txtPressToStart.gameObject.SetActive(true);
         txtHoldToSendBalls.gameObject.SetActive(false);
 
         isStarted = false;
+        isLevelEnding = false;
     }
 
-    // -------------------------------------------------------------
-    // END OF GAME PLAYER DATA SAVE
-    // -------------------------------------------------------------
     private void SaveEndOfGameData()
     {
         int ballsUsed = initialBalls - currentBallCount;
-        int moneyEarned = currentScore;
 
         PlayerSessionData session = new PlayerSessionData()
         {
             date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             levelId = currentLevel,
             ballUsed = ballsUsed,
-            moneyEarned = moneyEarned
+            moneyEarned = 0 // artık score yok → wallet server'dan geliyor
         };
 
         PlayerDataManager.Instance.AddSession(session);
-        PlayerDataManager.Instance.AddMoney(moneyEarned);
-
-        Debug.Log("SESSION SAVED.");
     }
 
     // -------------------------------------------------------------
     // GAME RESET HANDLER
     // -------------------------------------------------------------
-    private void HandleGameReset()
+    private async void HandleGameReset()
     {
+        // 1) SCORE → WALLET MERGE
+        int earnedThisSession = roundScore;
+        roundScore = 0;
+        txtScore.text = "Score: 0";
+
+        // 2) SERVER'A BİLDİR + WALLET’A EKLET
+        if (MockServerService.Instance != null)
+        {
+            await MockServerService.Instance.NotifyClientResetAsync(earnedThisSession);
+        }
+
+        // 3) WALLET UI Güncelle
+        if (RewardValidator.Instance != null)
+        {
+            int wallet = await MockServerService.Instance.GetWalletAsync();
+            RewardValidator.Instance.SyncWalletFromServer(wallet);
+        }
+
+        // 4) SESSION KAYDI (15 dk kazanımı)
+        PlayerSessionData session = new PlayerSessionData()
+        {
+            date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+            levelId = currentLevel,
+            ballUsed = 0, // reset sırasında hesaplanmaz
+            moneyEarned = earnedThisSession
+        };
+
+        PlayerDataManager.Instance.AddSession(session);
+
+        // 5) LEVEL RESET
         currentLevel = 1;
         LoadLevelData(currentLevel);
     }
@@ -350,5 +404,4 @@ public class GameManager : MonoBehaviour
 
         txtResetTimer.text = $"{diff.Minutes:00}:{diff.Seconds:00}";
     }
-
 }

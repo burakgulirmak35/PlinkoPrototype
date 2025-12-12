@@ -1,5 +1,4 @@
 using UnityEngine;
-using PlinkoPrototype;
 
 namespace PlinkoPrototype
 {
@@ -7,34 +6,59 @@ namespace PlinkoPrototype
     {
         public Rigidbody2D rb;
 
-        private bool hasScored; // 🆕
+        /// <summary>
+        /// BallManager tarafından atanan benzersiz top kimliği.
+        /// Server-side validation & analytics için kullanılır.
+        /// </summary>
+        public int BallId { get; set; }
+
+        private bool hasScored;
+        private Animator tempAnimator;
+        private Bucket tempBucket;
 
         private void OnEnable()
         {
-            // Pool’dan geri geldiğinde sıfırla
+            // Pool’dan geri geldiğinde sıfırlansın
             hasScored = false;
         }
 
-        private Animator tempAnimator;
-        private Bucket tempBucket;
         private void OnTriggerEnter2D(Collider2D collision)
         {
-            // Zaten skor aldıysa hiç uğraşma
             if (hasScored)
                 return;
 
+            // -------------------------------
+            // BUCKET → SCORE + REWARD SYSTEM
+            // -------------------------------
             if (collision.CompareTag("Bucket"))
             {
                 tempBucket = collision.transform.parent.GetComponent<Bucket>();
+
                 if (tempBucket != null)
                 {
+                    tempBucket.Score(transform.position);
                     hasScored = true;
-                    GameEvents.TriggerBallScored(tempBucket.bucketScore);
-                    Debug.Log($"Ball scored {tempBucket.bucketScore} points.");
+
+                    int score = tempBucket.bucketScore;
+                    string bucketId = tempBucket.name;
+
+                    // 1) UI History için event
+                    GameEvents.TriggerBallScored(score);
+
+                    // 2) Server batch için reward kaydı
+                    RewardValidator.Instance.RegisterReward(score, bucketId, BallId);
+
+                    Debug.Log($"Ball {BallId} scored {score} points in bucket {bucketId}.");
+
                     tempBucket = null;
                 }
+
                 BallManager.Instance.ReturnBall(this);
             }
+
+            // -------------------------------
+            // PEG → Hit animasyonu
+            // -------------------------------
             else if (collision.CompareTag("Peg"))
             {
                 tempAnimator = collision.GetComponent<Animator>();
@@ -46,5 +70,4 @@ namespace PlinkoPrototype
             }
         }
     }
-
 }
