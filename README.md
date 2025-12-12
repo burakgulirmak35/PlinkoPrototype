@@ -199,7 +199,7 @@ Amaç, yalnızca çalışan bir Plinko üretmek değil;
 ---
 
 ## 🎥 Gameplay Video
-<br/>
-[![Gameplay Video](https://img.youtube.com/vi/TAYuU-Meu0o/0.jpg)](https://youtube.com/shorts/TAYuU-Meu0o)
+
+[![Gameplay Video](https://img.youtube.com/vi/TAYuU-Meu0o/hqdefault.jpg)](https://www.youtube.com/watch?v=TAYuU-Meu0o)
 
 *Kısa gameplay videosu: core Plinko mekaniği, level progression ve reward akışı.*
