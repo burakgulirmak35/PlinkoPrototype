@@ -1,245 +1,205 @@
-🎮 Oynanış (Core Gameplay)
+<img width="489" height="475" alt="Gameplay Preview"
+src="https://github.com/user-attachments/assets/c7ee6a80-442f-4d7b-97d5-2b84d3426607" />
 
-Oyuncu ekrana basılı tutarak Plinko toplarını bırakır.
+---
 
-Toplar peg’lere çarparak aşağı düşer.
+## 🎮 Oynanış (Core Gameplay)
 
-Alt kısımdaki Bucket’lara giren her top bir ödül üretir.
+- Oyuncu ekrana **basılı tutarak** Plinko toplarını bırakır.
+- Toplar peg’lere çarparak aşağı düşer.
+- Alt kısımdaki **Bucket**’lara giren her top bir ödül üretir.
+- Oyuncu başlangıçta **200 top** ile başlar.
+- Belirli sayıda top skora ulaştığında:
+  - Level tamamlanır
+  - Bir sonraki level yüklenir
 
-Oyuncu başlangıçta 200 top ile başlar.
+---
 
-Belirli sayıda top skora ulaştığında:
+## 📈 İlerleme Sistemi (Progression)
 
-Level tamamlanır
+- Her level **JSON dosyası** ile tanımlanır.
+- Level verileri:
+  - Bucket sayısı
+  - Bucket skorları
+  - Level geçmek için gereken top sayısı
 
-Bir sonraki level yüklenir
+- Level atlandıkça:
+  - Bucket dizilimi değişir
+  - Daha yüksek ödüller sunulur
 
-📈 İlerleme Sistemi (Progression)
+Bu yapı **data-driven** olduğu için:
+- Kod değiştirmeden yeni level eklenebilir
+- Designer-friendly bir yapı sunar
 
-Her level JSON dosyası ile tanımlanır.
+---
 
-Level verileri:
+## 🧠 Mimari Yaklaşım
 
-Bucket sayısı
+### Event-Driven Sistem
 
-Bucket skorları
+Oyun akışı, merkezi bir **GameEvents** yapısı üzerinden ilerler:
 
-Level geçmek için gereken top sayısı
-
-Level atlandıkça:
-
-Bucket dizilimi değişir
-
-Daha yüksek ödüller sunulur
-
-Bu yapı data-driven olduğu için:
-
-Kod değiştirmeden yeni level eklenebilir
-
-Designer-friendly bir yapı sunar
-
-🧠 Mimari Yaklaşım
-Event-Driven Sistem
-
-Oyun akışı, merkezi bir GameEvents yapısı üzerinden ilerler:
-
-Input
-
-Ball spawn
-
-Skor
-
-Level geçişi
-
-UI güncellemeleri
+- Input
+- Ball spawn
+- Skor
+- Level geçişi
+- UI güncellemeleri
 
 Bu sayede:
+- Sistemler birbirine **tightly-coupled değildir**
+- UI → Gameplay polling yapılmaz
+- Performans kaybı önlenir
 
-Sistemler birbirine tightly-coupled değildir
+---
 
-UI → Gameplay polling yapılmaz
+### Ana Sistemler
 
-Performans kaybı önlenir
+| Sistem | Sorumluluk |
+|------|------------|
+| GameManager | Oyun state’leri, UI, level akışı |
+| BallManager | Object pooling, spawn, fizik |
+| LevelManager | JSON’dan runtime level üretimi |
+| PlayerDataManager | Kalıcılık & reset |
+| RewardValidator | Ödül toplama & doğrulama |
+| MockServerService | Backend simülasyonu |
 
-Ana Sistemler
-Sistem	Sorumluluk
-GameManager	Oyun state’leri, UI, level akışı
-BallManager	Object pooling, spawn, fizik
-LevelManager	JSON’dan runtime level üretimi
-PlayerDataManager	Kalıcılık & reset
-RewardValidator	Ödül toplama & doğrulama
-MockServerService	Backend simülasyonu
-🔐 Ödül Doğrulama Stratejisi (Case’in En Kritik Kısmı)
-Problem (Case’te Tanımlanan)
+---
 
-Client tarafında hesaplanan ödül güvenilmez
+## 🔐 Ödül Doğrulama Stratejisi  
+*(Case’in En Kritik Kısmı)*
 
-Her top için server isteği atmak performanssız
+### Problem (Case’te Tanımlanan)
 
-Çözüm (Bu Projede)
+- Client tarafında hesaplanan ödül **güvenilmez**
+- Her top için server isteği atmak **performanssız**
 
-Batch-based + Server-authoritative yaklaşım:
+### Çözüm (Bu Projede)
 
-Her top düştüğünde client tarafında RewardPackage oluşturulur
+**Batch-based + Server-authoritative yaklaşım:**
 
-UI optimistic olarak güncellenir
-
-Ödüller:
-
-Belirli sayıya ulaştığında
-
-Belirli süre geçtiğinde
-
-Level sonunda
-batch halinde server’a gönderilir
-
-Server:
-
-Aynı topun iki kez işlenmesini engeller (BallId)
-
-Wallet’ı authoritative şekilde günceller
-
-Client, server’dan gelen wallet ile senkronize olur
+1. Her top düştüğünde client tarafında **RewardPackage** oluşturulur
+2. UI **optimistic** olarak güncellenir
+3. Ödüller:
+   - Belirli sayıya ulaştığında
+   - Belirli süre geçtiğinde
+   - Level sonunda  
+   batch halinde server’a gönderilir
+4. Server:
+   - Aynı topun iki kez işlenmesini engeller (**BallId**)
+   - Wallet’ı **authoritative** şekilde günceller
+5. Client, server’dan gelen wallet ile senkronize olur
 
 Bu yapı:
+- Güvenliği sağlar
+- Network spam’i engeller
+- Kullanıcı deneyimini bozmaz
 
-Güvenliği sağlar
+---
 
-Network spam’i engeller
+## 🧪 Mock Backend (Server Simülasyonu)
 
-Kullanıcı deneyimini bozmaz
+Gerçek backend yerine **MockServerService** kullanılmıştır:
 
-🧪 Mock Backend (Server Simülasyonu)
+- `Task.Delay` ile **network latency simülasyonu**
+- Authoritative wallet
+- Duplicate reward engelleme
+- Player state persistence
 
-Gerçek backend yerine MockServerService kullanılmıştır:
+> Case gereği servis **boş stub değildir**, tüm mantık çalışır durumdadır.
 
-Task.Delay ile network latency simülasyonu
+---
 
-Authoritative wallet
+## ⏱ Zaman Bazlı Reset & Kalıcılık
 
-Duplicate reward engelleme
+- Oyun **her 15 dakikada bir** resetlenir
+- Reset sırasında:
+  - Level ve top sayısı sıfırlanır
+  - Wallet ve reward history **korunur**
 
-Player state persistence
+- Reset süresi:
+  - Oyun kapatılıp açılsa bile tutarlı çalışır
+  - UI’da geri sayım olarak gösterilir
 
-Case gereği, servis boş stub değildir, tüm mantık çalışır durumdadır.
+---
 
-⏱ Zaman Bazlı Reset & Kalıcılık
+## ⚡ Performans Önlemleri
 
-Oyun her 15 dakikada bir resetlenir
+- **Object Pooling**
+  - Plinko Ball
+  - CoinText
+  - History Entry
+- Event-driven UI güncellemeleri
+- Minimal allocation
+- GC pressure minimize edilmiştir
+- 5–10 top/sn senaryosunda stabil çalışacak şekilde tasarlanmıştır
 
-Reset sırasında:
+---
 
-Level ve top sayısı sıfırlanır
+## 🛠 Editor Araçları
 
-Wallet ve reward history korunur
+### Level Creator (Unity Editor Tool)
 
-Reset süresi:
+<br/>
 
-Oyun kapatılıp açılsa bile tutarlı çalışır
+<img width="489" height="475" alt="Level Creator Tool"
+src="https://github.com/user-attachments/assets/65f10ea7-849b-49d2-b5e9-116b66cb526c" />
 
-UI’da geri sayım olarak gösterilir
-
-⚡ Performans Önlemleri
-
-Object Pooling:
-
-Plinko Ball
-
-CoinText
-
-History Entry
-
-Event-driven UI güncellemeleri
-
-Minimal allocation
-
-GC pressure minimize edilmiştir
-
-5–10 top/sn senaryosunda stabil çalışacak şekilde tasarlanmıştır
-
-🛠 Editor Araçları
-Level Creator Window
-
-Unity Editor içinde geliştirilen custom tool:
-
-Level oluşturma
-
-Var olan level’ı JSON’dan yükleme
-
-Bucket skor & renk düzenleme
-
-Tek tuşla JSON export
-
-🖥 Debug & Görselleştirme
-
-RewardValidator Debug HUD:
-
-Pending reward sayısı
-
-Local vs Server wallet
-
-Son batch zamanı
-
-Latency aralığı
-
-Bu HUD, sistemin doğru çalıştığını görsel olarak kanıtlamak için eklenmiştir.
-
-▶ Çalıştırma
-
-Unity 2022+ ile projeyi aç
-
-StreamingAssets/Levels klasörünü kontrol et
-
-Ana sahneyi aç
-
-Play
-
-🏁 Sonuç
-
-Bu proje:
-
-Case’te istenen tüm teknik gereksinimleri karşılar
-
-Gerçek mobil oyun mimarilerini simüle eder
-
-Performans, güvenlik ve ölçeklenebilirliği önceliklendirir
-
-🛠 Level Creator (Unity Editor Tool)
-...
-<img width="489" height="475" alt="image" src="https://github.com/user-attachments/assets/65f10ea7-849b-49d2-b5e9-116b66cb526c" />
-
-
-Bu projede, level içeriklerinin koddan bağımsız olarak üretilebilmesi için özel bir Unity Editor aracı (Level Creator) geliştirilmiştir.
+Bu projede, level içeriklerinin **koddan bağımsız** olarak üretilebilmesi için özel bir  
+**Unity Editor aracı (Level Creator)** geliştirilmiştir.
 
 Bu araç sayesinde:
 
-Level ID üzerinden mevcut bir level JSON dosyasından yüklenebilir
+- Level ID üzerinden mevcut bir level **JSON dosyasından yüklenebilir**
+- Bucket sayısı dinamik olarak ayarlanabilir
+- Her bucket için:
+  - **Skor değeri**
+  - **Renk (hex formatında)**
+  görsel arayüz üzerinden düzenlenebilir
+- Level geçmek için gereken top sayısı belirlenebilir
+- Tek tuşla level verisi **StreamingAssets/Levels** klasörüne JSON olarak kaydedilir
 
-Bucket sayısı dinamik olarak ayarlanabilir
-
-Her bucket için:
-
-Skor değeri
-
-Renk (hex formatında)
-görsel arayüz üzerinden düzenlenebilir
-
-Level geçmek için gereken top sayısı belirlenebilir
-
-Tek tuşla level verisi StreamingAssets/Levels klasörüne JSON olarak kaydedilir
-
-Bu yapı data-driven olarak tasarlanmıştır.
-Mevcut implementasyonda level verileri lokal JSON dosyalarından okunmaktadır; ancak aynı yapı backend üzerinden de servis edilebilecek şekilde kurgulanmıştır.
+Bu yapı **data-driven** olarak tasarlanmıştır.  
+Mevcut implementasyonda level verileri lokal JSON dosyalarından okunmaktadır; ancak aynı yapı **backend üzerinden** de servis edilebilecek şekilde kurgulanmıştır.
 
 Bu sayede:
+- Oyunu güncellemeden **level dengeleri değiştirilebilir**
+- Yeni level’lar **remote config / backend** üzerinden eklenebilir
+- **A/B test**, **live-ops** ve hızlı dengeleme senaryoları desteklenir
 
-Oyunu güncellemeden level dengeleri değiştirilebilir
+Bu yaklaşım, gerçek projelerde kullanılan **live-ops uyumlu içerik yönetimi** ve  
+**ölçeklenebilir level pipeline** mantığını yansıtmaktadır.
 
-Yeni level’lar remote config / backend üzerinden eklenebilir
+---
 
-A/B test, live-ops ve hızlı dengeleme senaryoları desteklenir
+## 🖥 Debug & Görselleştirme
 
-Bu yaklaşım, gerçek projelerde kullanılan live-ops uyumlu içerik yönetimi ve ölçeklenebilir level pipeline mantığını yansıtmaktadır.
+**RewardValidator Debug HUD**:
 
+- Pending reward sayısı
+- Local vs Server wallet
+- Son batch zamanı
+- Latency aralığı
 
+Bu HUD, sistemin doğru çalıştığını **görsel olarak kanıtlamak** için eklenmiştir.
 
+---
+
+## ▶ Çalıştırma
+
+1. Unity **2022+** ile projeyi aç
+2. `StreamingAssets/Levels` klasörünü kontrol et
+3. Ana sahneyi aç
+4. Play
+
+---
+
+## 🏁 Sonuç
+
+Bu proje:
+
+- Case’te istenen tüm teknik gereksinimleri karşılar
+- Gerçek mobil oyun mimarilerini simüle eder
+- Performans, güvenlik ve ölçeklenebilirliği önceliklendirir
+
+Amaç, yalnızca çalışan bir Plinko üretmek değil;  
+**üretim ortamına hazır bir sistem yaklaşımı** sunmaktır.
