@@ -10,7 +10,7 @@
 
 ---
 
-## 📈 İlerleme Sistemi (Progression)
+## İlerleme Sistemi (Progression)
 
 - Her level **JSON dosyası** ile tanımlanır.
 - Level verileri:
@@ -28,7 +28,7 @@ Bu yapı **data-driven** olduğu için:
 
 ---
 
-## 🧠 Mimari Yaklaşım
+## Mimari Yaklaşım
 
 ### Event-Driven Sistem
 
@@ -42,8 +42,6 @@ Oyun akışı, merkezi bir **GameEvents** yapısı üzerinden ilerler:
 
 Bu sayede:
 - Sistemler birbirine **tightly-coupled değildir**
-- UI → Gameplay polling yapılmaz
-- Performans kaybı önlenir
 
 ---
 
@@ -60,7 +58,7 @@ Bu sayede:
 
 ---
 
-## 🔐 Ödül Doğrulama Stratejisi  
+## Ödül Doğrulama Stratejisi  
 *(Case’in En Kritik Kısmı)*
 
 ### Problem (Case’te Tanımlanan)
@@ -73,16 +71,15 @@ Bu sayede:
 **Batch-based + Server-authoritative yaklaşım:**
 
 1. Her top düştüğünde client tarafında **RewardPackage** oluşturulur
-2. UI **optimistic** olarak güncellenir
-3. Ödüller:
+2. Ödüller:
    - Belirli sayıya ulaştığında
    - Belirli süre geçtiğinde
    - Level sonunda  
    batch halinde server’a gönderilir
-4. Server:
+3. Server:
    - Aynı topun iki kez işlenmesini engeller (**BallId**)
    - Wallet’ı **authoritative** şekilde günceller
-5. Client, server’dan gelen wallet ile senkronize olur
+4. Client, server’dan gelen wallet ile senkronize olur
 
 Bu yapı:
 - Güvenliği sağlar
@@ -91,7 +88,7 @@ Bu yapı:
 
 ---
 
-## 🧪 Mock Backend (Server Simülasyonu)
+## Mock Backend (Server Simülasyonu)
 
 Gerçek backend yerine **MockServerService** kullanılmıştır:
 
@@ -104,7 +101,7 @@ Gerçek backend yerine **MockServerService** kullanılmıştır:
 
 ---
 
-## ⏱ Zaman Bazlı Reset & Kalıcılık
+## Zaman Bazlı Reset & Kalıcılık
 
 - Oyun **her 15 dakikada bir** resetlenir
 - Reset sırasında:
@@ -117,7 +114,7 @@ Gerçek backend yerine **MockServerService** kullanılmıştır:
 
 ---
 
-## ⚡ Performans Önlemleri
+## Performans Önlemleri
 
 - **Object Pooling**
   - Plinko Ball
@@ -130,7 +127,7 @@ Gerçek backend yerine **MockServerService** kullanılmıştır:
 
 ---
 
-## 🛠 Editor Araçları
+## Editor Araçları
 
 ### Level Creator (Unity Editor Tool)
 
@@ -166,7 +163,7 @@ Bu yaklaşım, gerçek projelerde kullanılan **live-ops uyumlu içerik yönetim
 
 ---
 
-## 🖥 Debug & Görselleştirme
+## Debug & Görselleştirme
 
 **RewardValidator Debug HUD**:
 
@@ -179,7 +176,7 @@ Bu HUD, sistemin doğru çalıştığını **görsel olarak kanıtlamak** için 
 
 ---
 
-## ▶ Çalıştırma
+## Çalıştırma
 
 1. Unity **2022+** ile projeyi aç
 2. `StreamingAssets/Levels` klasörünü kontrol et
@@ -188,7 +185,7 @@ Bu HUD, sistemin doğru çalıştığını **görsel olarak kanıtlamak** için 
 
 ---
 
-## 🏁 Sonuç
+## Sonuç
 
 Bu proje:
 
