@@ -19,6 +19,7 @@ namespace PlinkoPrototype
             GameEvents.OnLevelStarted += HandleLevelStarted;
             GameEvents.OnBallScored += HandleBallScored;
             GameEvents.OnLevelCompleted += HandleLevelCompleted;
+            GameEvents.OnGameStateRestored += RefreshFromGameState;
         }
 
         private void OnDisable()
@@ -26,19 +27,28 @@ namespace PlinkoPrototype
             GameEvents.OnLevelStarted -= HandleLevelStarted;
             GameEvents.OnBallScored -= HandleBallScored;
             GameEvents.OnLevelCompleted -= HandleLevelCompleted;
+            GameEvents.OnGameStateRestored -= RefreshFromGameState;
         }
+
+
 
         private void HandleLevelStarted(int level)
         {
             ballsScored = 0;
             ballsRequired = GameManager.Instance.GetBallsRequiredForLevel();
-
             UpdateUI();
         }
 
+
+        private void RefreshFromGameState()
+        {
+            ballsScored = GameManager.Instance.GetBallsScoredThisLevel();
+            ballsRequired = GameManager.Instance.GetBallsRequiredForLevel();
+            UpdateUI();
+        }
         private void HandleBallScored(int amount)
         {
-            ballsScored++;
+            ballsScored = GameManager.Instance.GetBallsScoredThisLevel();
             UpdateUI();
         }
 

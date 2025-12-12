@@ -4,7 +4,8 @@ using System.Threading.Tasks;
 using PlinkoPrototype;
 using TMPro;
 using UnityEngine;
-using System.Collections.Generic;
+using System.Globalization;
+using System;
 
 public class GameManager : MonoBehaviour
 {
@@ -122,33 +123,28 @@ public class GameManager : MonoBehaviour
         {
             currentLevel = 1;
             roundScore = 0;
+            ballsScoredThisLevel = 0;
+
             txtScore.text = "Score: 0";
 
             LoadLevelData(currentLevel);
-            GameEvents.TriggerBallCountRestore(200); // fallback
-            GameEvents.TriggerHistoryRestore(null);
+            GameEvents.TriggerBallCountRestore(200); // ilk oyun fallback
+
+            GameEvents.TriggerGameStateRestored();
             return;
         }
 
-        // 🔥 SCORE = TEK KAYNAK
         currentLevel = Mathf.Max(1, data.savedLevel);
         roundScore = Mathf.Max(0, data.savedRoundScore);
+        ballsScoredThisLevel = Mathf.Max(0, data.savedBallsScoredThisLevel);
+
         txtScore.text = "Score: " + roundScore;
 
         LoadLevelData(currentLevel);
-
-        // 🔥 BALL
         GameEvents.TriggerBallCountRestore(data.savedTotalBallsRemaining);
-
-        // 🔥 HISTORY (UI ONLY)
-        ReplayHistory(data.sessionRewards);
+        GameEvents.TriggerHistoryRestore(data.sessionRewards);
+        GameEvents.TriggerGameStateRestored();
     }
-
-    private void ReplayHistory(List<RewardPackage> rewards)
-    {
-        GameEvents.TriggerHistoryRestore(rewards);
-    }
-
 
     // -------------------------------------------------------------
     // INPUT
@@ -195,9 +191,11 @@ public class GameManager : MonoBehaviour
         MockServerService.Instance?.ReportGameState(
             currentLevel,
             currentBallCount,
-            roundScore
+            roundScore,
+            ballsScoredThisLevel
         );
     }
+
 
     // -------------------------------------------------------------
     // SCORE → SERVER
@@ -205,15 +203,17 @@ public class GameManager : MonoBehaviour
     private void HandleRoundScore(int amount)
     {
         roundScore += amount;
-        txtScore.text = "Score: " + roundScore;
         ballsScoredThisLevel++;
+
+        txtScore.text = "Score: " + roundScore;
 
         if (!isRestoring)
         {
             MockServerService.Instance?.ReportGameState(
                 currentLevel,
                 currentBallCount,
-                roundScore
+                roundScore,
+                ballsScoredThisLevel   // 🔥 YENİ
             );
         }
 
@@ -224,6 +224,7 @@ public class GameManager : MonoBehaviour
             StartCoroutine(LevelEndRoutine());
         }
     }
+
 
     // -------------------------------------------------------------
     // LEVEL
@@ -237,7 +238,6 @@ public class GameManager : MonoBehaviour
         LevelData data = JsonUtility.FromJson<LevelData>(json);
 
         ballsRequiredForLevel = data.ballsRequiredForLevel;
-        ballsScoredThisLevel = 0;
 
         GameEvents.TriggerLevelDataLoaded(data);
         GameEvents.TriggerLevelStarted(level);
@@ -274,6 +274,8 @@ public class GameManager : MonoBehaviour
 
     private void HandleLevelCompleted()
     {
+        ballsScoredThisLevel = 0;
+
         currentLevel++;
         if (currentLevel > maxLevel)
             currentLevel = maxLevel;
@@ -295,6 +297,8 @@ public class GameManager : MonoBehaviour
         roundScore = 0;
         txtScore.text = "Score: 0";
 
+        while (PlayerDataManager.Instance == null)
+            await Task.Yield();
         await MockServerService.Instance.PerformHardResetAsync();
 
         int wallet = await MockServerService.Instance.GetWalletAsync();
@@ -372,22 +376,61 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private bool resetTriggered = false;
     private void UpdateResetTimerUI()
     {
+        if (PlayerDataManager.Instance == null ||
+            PlayerDataManager.Instance.Data == null)
+        {
+            txtResetTimer.text = "--:--";
+            return;
+        }
+
         string lastResetStr = PlayerDataManager.Instance.Data.lastResetUtc;
+
         if (string.IsNullOrEmpty(lastResetStr))
         {
             txtResetTimer.text = "--:--";
             return;
         }
 
-        System.DateTime lastReset = System.DateTime.Parse(lastResetStr);
-        System.TimeSpan diff = lastReset.AddMinutes(15) - System.DateTime.UtcNow;
+        if (!DateTime.TryParseExact(
+            lastResetStr,
+            "o",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTime lastReset))
+        {
+            txtResetTimer.text = "--:--";
+            return;
+        }
 
-        txtResetTimer.text = diff.TotalSeconds <= 0
-            ? "00:00"
-            : $"{diff.Minutes:00}:{diff.Seconds:00}";
+        TimeSpan remaining =
+            TimeSpan.FromMinutes(15) -
+            (DateTime.UtcNow - lastReset.ToUniversalTime());
+
+        if (remaining.TotalSeconds <= 0)
+        {
+            txtResetTimer.text = "00:00";
+
+            // 🔥 RESET TETİKLE
+            if (!resetTriggered)
+            {
+                resetTriggered = true;
+                PlayerDataManager.Instance.ForceHardResetFromTimer();
+            }
+
+            return;
+        }
+
+        resetTriggered = false;
+
+        txtResetTimer.text =
+            $"{remaining.Minutes:00}:{remaining.Seconds:00}";
     }
+
+
+
 
     // -------------------------------------------------------------
     // STATE
@@ -399,8 +442,14 @@ public class GameManager : MonoBehaviour
         GameEvents.TriggerGameStateChanged(currentState);
     }
 
+
     public int GetBallsRequiredForLevel()
     {
         return ballsRequiredForLevel;
+    }
+
+    public int GetBallsScoredThisLevel()
+    {
+        return ballsScoredThisLevel;
     }
 }

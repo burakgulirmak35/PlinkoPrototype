@@ -82,17 +82,19 @@ namespace PlinkoPrototype
         // -------------------------------------------------
         // GAME STATE SAVE (AUTHORITATIVE)
         // -------------------------------------------------
-        public void ReportGameState(int level, int ballsRemaining, int score)
+        public void ReportGameState(int level, int ballsRemaining, int score, int ballsScoredThisLevel)
         {
             var data = PlayerDataManager.Instance.Data;
 
             data.savedLevel = level;
             data.savedTotalBallsRemaining = ballsRemaining;
             data.savedRoundScore = score;
+            data.savedBallsScoredThisLevel = ballsScoredThisLevel;
 
             PlayerDataManager.Instance.Save();
-
         }
+
+
 
         // -------------------------------------------------
         // REWARD VALIDATION (TOP BAZLI HISTORY)

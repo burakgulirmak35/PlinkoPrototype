@@ -80,6 +80,12 @@ namespace PlinkoPrototype
         {
             OnHistoryRestore?.Invoke(rewards);
         }
+
+        public static Action OnGameStateRestored;
+        public static void TriggerGameStateRestored()
+        {
+            OnGameStateRestored?.Invoke();
+        }
         #endregion
 
     }

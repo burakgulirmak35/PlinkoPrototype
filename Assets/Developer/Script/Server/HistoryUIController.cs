@@ -21,6 +21,9 @@ namespace PlinkoPrototype
         private int maxVisible = 0;
         private int poolSize = 0;
 
+        // ------------------------------------------------------
+        // UNITY
+        // ------------------------------------------------------
         private void Start()
         {
             if (layoutGroup == null)
@@ -32,16 +35,87 @@ namespace PlinkoPrototype
 
         private void OnEnable()
         {
+            // 🔥 SADECE GAMEPLAY
             GameEvents.OnBallScored += HandleBallScored;
+
+            // 🔥 SADECE RESTORE
+            GameEvents.OnHistoryRestore += RebuildHistory;
         }
 
         private void OnDisable()
         {
             GameEvents.OnBallScored -= HandleBallScored;
+            GameEvents.OnHistoryRestore -= RebuildHistory;
         }
 
         // ------------------------------------------------------
-        // POOL CALCULATION
+        // RESTORE
+        // ------------------------------------------------------
+        private void RebuildHistory(List<RewardPackage> rewards)
+        {
+            ClearAll();
+
+            if (rewards == null)
+                return;
+
+            foreach (var reward in rewards)
+            {
+                AddEntry(reward.bucketScore);
+            }
+        }
+
+        // ------------------------------------------------------
+        // GAMEPLAY
+        // ------------------------------------------------------
+        private void HandleBallScored(int amount)
+        {
+            AddEntry(amount);
+        }
+
+        // ------------------------------------------------------
+        // CORE ADD LOGIC (FIFO ROTATION)
+        // ------------------------------------------------------
+        private void AddEntry(int amount)
+        {
+            HistoryEntry entry;
+
+            // 1) Yer varsa → yeni entry
+            if (activeEntries.Count < maxVisible)
+            {
+                entry = pool.Dequeue();
+                activeEntries.Add(entry);
+            }
+            else
+            {
+                // 2) FIFO rotation
+                entry = activeEntries[0];
+                activeEntries.RemoveAt(0);
+
+                entry.gameObject.SetActive(false);
+                activeEntries.Add(entry);
+            }
+
+            entry.SetEntryText($"+{amount}");
+            entry.transform.SetAsLastSibling();
+            entry.gameObject.SetActive(true);
+        }
+
+        // ------------------------------------------------------
+        // CLEAR
+        // ------------------------------------------------------
+        private void ClearAll()
+        {
+            foreach (var entry in activeEntries)
+            {
+                entry.gameObject.SetActive(false);
+                pool.Enqueue(entry);
+            }
+
+            activeEntries.Clear();
+        }
+
+        // ------------------------------------------------------
+        // POOL
         // ------------------------------------------------------
         private void CalculatePoolSize()
         {
@@ -53,57 +127,18 @@ namespace PlinkoPrototype
             float availableWidth = containerWidth - (leftPadding + rightPadding);
 
             maxVisible = Mathf.FloorToInt((availableWidth + spacing) / (prefabWidth + spacing));
-
-            poolSize = maxVisible + 1; // +1 güvenlik
-            if (poolSize < 2)
-                poolSize = 2;
+            poolSize = Mathf.Max(2, maxVisible + 1); // güvenlik payı
         }
 
-        // ------------------------------------------------------
-        // CREATE POOL
-        // ------------------------------------------------------
         private void CreatePool()
         {
             for (int i = 0; i < poolSize; i++)
             {
                 HistoryEntry entry = Instantiate(historyEntryPrefab, historyContainer);
                 entry.SetEntryText("");
-                entry.gameObject.SetActive(false); // Başlangıçta gizli
+                entry.gameObject.SetActive(false);
                 pool.Enqueue(entry);
             }
-        }
-
-        // ------------------------------------------------------
-        // ADD NEW ENTRY (FIFO ROTATION LOGIC)
-        // ------------------------------------------------------
-        private void HandleBallScored(int amount)
-        {
-            HistoryEntry entry;
-
-            // 1) Eğer aktif entry sayısı maxVisible'dan küçükse → yeni slot aç
-            if (activeEntries.Count < maxVisible)
-            {
-                entry = pool.Dequeue();   // Pool'dan yeni entry al
-                activeEntries.Add(entry); // Aktif listeye ekle
-            }
-            else
-            {
-                // 2) Ekran doluysa → en soldaki entry disable edilir, rotation yapılır
-                entry = activeEntries[0];
-                activeEntries.RemoveAt(0);
-
-                entry.gameObject.SetActive(false); // Eski görünümü temizle
-                activeEntries.Add(entry);          // Sona ekle
-            }
-
-            // 3) Entry’i yeni değerle güncelle
-            entry.SetEntryText($"+{amount}");
-
-            // 4) Entry’i en sağ child haline getir (UI'da sağda görünmesi için)
-            entry.transform.SetAsLastSibling();
-
-            // 5) Görünür yap
-            entry.gameObject.SetActive(true);
         }
     }
 }
