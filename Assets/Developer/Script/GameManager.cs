@@ -6,6 +6,7 @@ using TMPro;
 using UnityEngine;
 using System.Globalization;
 using System;
+using UnityEngine.Networking;
 
 public class GameManager : MonoBehaviour
 {
@@ -263,19 +264,46 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     // LEVEL
     // -------------------------------------------------------------
-    private void LoadLevelData(int level)
+    private async void LoadLevelData(int level)
     {
-        string path = Path.Combine(Application.streamingAssetsPath, $"Levels/level_{level}.json");
-        if (!File.Exists(path)) return;
 
-        string json = File.ReadAllText(path);
+        string fileName = $"Levels/level_{level}.json";
+        string path = Path.Combine(Application.streamingAssetsPath, fileName);
+        string json = null;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        UnityWebRequest www = UnityWebRequest.Get(path);
+        var operation = www.SendWebRequest();
+
+        while (!operation.isDone)
+            await Task.Yield();
+
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            Debug.LogError($"[LevelLoad] Android load failed: {www.error}");
+            return;
+        }
+
+        json = www.downloadHandler.text;
+#else
+        if (!File.Exists(path))
+        {
+            Debug.LogError($"[LevelLoad] File not found: {path}");
+            return;
+        }
+
+        json = File.ReadAllText(path);
+#endif
+
         LevelData data = JsonUtility.FromJson<LevelData>(json);
-
         ballsRequiredForLevel = data.ballsRequiredForLevel;
 
         GameEvents.TriggerLevelDataLoaded(data);
         GameEvents.TriggerLevelStarted(level);
+
+        Debug.Log($"[LevelLoad] Level {level} loaded successfully");
     }
+
 
     private void DetectMaxLevel()
     {
