@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using DG.Tweening;
 using UnityEngine;
 
 namespace PlinkoPrototype
@@ -21,6 +22,7 @@ namespace PlinkoPrototype
         #endregion
 
         [Header("Ball Settings")]
+        [SerializeField] private Transform fakeBall;
         [SerializeField] private GameObject ballPrefab;
         [SerializeField] private Transform ballPoolParent;
 
@@ -30,6 +32,7 @@ namespace PlinkoPrototype
         [Header("Spawn Settings")]
         [SerializeField] private float spawnForce = 2f;
         [SerializeField] private float spawnInterval = 0.1f;
+        [SerializeField] private float spawnYOffset = 2f;
 
         private readonly Queue<PlinkoBall> ballPool = new Queue<PlinkoBall>();
         private int availableBalls;
@@ -39,10 +42,11 @@ namespace PlinkoPrototype
         private Vector2 spawnMax;
 
         private float sideForce = 0.5f;
-        [SerializeField] private float spawnYOffset = 2f;
-
         private int ballIdCounter = 0;
 
+        // ------------------------------------------------
+        // LIFECYCLE
+        // ------------------------------------------------
         private void Start()
         {
             CreatePool();
@@ -65,8 +69,12 @@ namespace PlinkoPrototype
             GameEvents.OnGameReset -= HandleGameReset;
         }
 
+        // ------------------------------------------------
+        // RESET
+        // ------------------------------------------------
         private void HandleGameReset()
         {
+            StopFakeBall();
             ResetBallAvailability();
         }
 
@@ -187,6 +195,45 @@ namespace PlinkoPrototype
 
             spawnMin = new Vector2(minX, y);
             spawnMax = new Vector2(maxX, y);
+
+            StartFakeBall();
+        }
+
+        // ------------------------------------------------
+        // FAKE BALL
+        // ------------------------------------------------
+        private Tween fakeBallTween;
+        private float fakeBallDuration = 2f;
+
+        private bool isLoopingFakeBall = false;
+        private void StartFakeBall()
+        {
+
+            if (isLoopingFakeBall) return;
+            isLoopingFakeBall = true;
+
+            fakeBall.DOKill();
+            fakeBall.gameObject.SetActive(true);
+
+            fakeBall.position = spawnMin;
+            fakeBall.localScale = Vector3.one * 0.5f;
+
+            fakeBallTween = fakeBall
+                .DOMoveX(spawnMax.x, fakeBallDuration)
+                .SetEase(Ease.Linear)
+                .SetLoops(-1, LoopType.Yoyo);
+        }
+
+        private void StopFakeBall()
+        {
+            if (fakeBallTween != null)
+            {
+                fakeBallTween.Kill();
+                fakeBallTween = null;
+            }
+
+            isLoopingFakeBall = false;
+            fakeBall.gameObject.SetActive(false);
         }
     }
 }

@@ -258,6 +258,11 @@ public class GameManager : MonoBehaviour
         GameEvents.TriggerLevelStarted(level);
     }
 
+    public int GetBallsRequiredForLevel()
+    {
+        return ballsRequiredForLevel;
+    }
+
     private void DetectMaxLevel()
     {
         string dir = Path.Combine(Application.streamingAssetsPath, "Levels");
