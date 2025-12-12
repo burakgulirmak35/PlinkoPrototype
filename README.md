@@ -203,3 +203,41 @@ Case’te istenen tüm teknik gereksinimleri karşılar
 Gerçek mobil oyun mimarilerini simüle eder
 
 Performans, güvenlik ve ölçeklenebilirliği önceliklendirir
+
+🛠 Level Creator (Unity Editor Tool)
+<img width="484" height="776" alt="image" src="https://github.com/user-attachments/assets/85120b6d-2c48-4b08-b151-633b40893645" />
+
+Bu projede, level içeriklerinin koddan bağımsız olarak üretilebilmesi için özel bir Unity Editor aracı (Level Creator) geliştirilmiştir.
+
+Bu araç sayesinde:
+
+Level ID üzerinden mevcut bir level JSON dosyasından yüklenebilir
+
+Bucket sayısı dinamik olarak ayarlanabilir
+
+Her bucket için:
+
+Skor değeri
+
+Renk (hex formatında)
+görsel arayüz üzerinden düzenlenebilir
+
+Level geçmek için gereken top sayısı belirlenebilir
+
+Tek tuşla level verisi StreamingAssets/Levels klasörüne JSON olarak kaydedilir
+
+Bu yapı data-driven olarak tasarlanmıştır.
+Mevcut implementasyonda level verileri lokal JSON dosyalarından okunmaktadır; ancak aynı yapı backend üzerinden de servis edilebilecek şekilde kurgulanmıştır.
+
+Bu sayede:
+
+Oyunu güncellemeden level dengeleri değiştirilebilir
+
+Yeni level’lar remote config / backend üzerinden eklenebilir
+
+A/B test, live-ops ve hızlı dengeleme senaryoları desteklenir
+
+Bu yaklaşım, gerçek projelerde kullanılan live-ops uyumlu içerik yönetimi ve ölçeklenebilir level pipeline mantığını yansıtmaktadır.
+
+
+
