@@ -73,5 +73,14 @@ namespace PlinkoPrototype
             OnBallCountRestore?.Invoke(count);
         }
 
+        #region Data History
+        public static Action<List<RewardPackage>> OnHistoryRestore;
+
+        public static void TriggerHistoryRestore(List<RewardPackage> rewards)
+        {
+            OnHistoryRestore?.Invoke(rewards);
+        }
+        #endregion
+
     }
 }

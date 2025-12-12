@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using PlinkoPrototype;
 using TMPro;
 using UnityEngine;
+using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
@@ -125,26 +126,29 @@ public class GameManager : MonoBehaviour
 
             LoadLevelData(currentLevel);
             GameEvents.TriggerBallCountRestore(200); // fallback
+            GameEvents.TriggerHistoryRestore(null);
             return;
         }
 
+        // 🔥 SCORE = TEK KAYNAK
         currentLevel = Mathf.Max(1, data.savedLevel);
         roundScore = Mathf.Max(0, data.savedRoundScore);
         txtScore.text = "Score: " + roundScore;
 
         LoadLevelData(currentLevel);
+
+        // 🔥 BALL
         GameEvents.TriggerBallCountRestore(data.savedTotalBallsRemaining);
+
+        // 🔥 HISTORY (UI ONLY)
         ReplayHistory(data.sessionRewards);
     }
 
-
-    private void ReplayHistory(System.Collections.Generic.List<RewardPackage> rewards)
+    private void ReplayHistory(List<RewardPackage> rewards)
     {
-        if (rewards == null) return;
-
-        foreach (var reward in rewards)
-            GameEvents.TriggerBallScored(reward.bucketScore);
+        GameEvents.TriggerHistoryRestore(rewards);
     }
+
 
     // -------------------------------------------------------------
     // INPUT
