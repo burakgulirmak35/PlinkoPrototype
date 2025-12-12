@@ -22,7 +22,8 @@ public class GameManager : MonoBehaviour
 
     [Header("UI Elements")]
     [SerializeField] private TextMeshProUGUI txtPressToStart;
-    [SerializeField] private TextMeshProUGUI txtHoldToSendBalls;
+    [SerializeField] private GameObject HoldToSendBallsObj;
+    [SerializeField] private TextMeshProUGUI txtHoldToSendBallsObj;
     [SerializeField] private TextMeshProUGUI txtBallCount;
     [SerializeField] private TextMeshProUGUI txtWallet;
     [SerializeField] private TextMeshProUGUI txtResetTimer;
@@ -30,7 +31,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI txtScore;
 
     [Header("Game State")]
-    private bool isStarted = false;
+    [SerializeField] private GameState currentState = GameState.Idle;
     private int currentBallCount = 0;
 
     [Header("Level Info")]
@@ -38,9 +39,7 @@ public class GameManager : MonoBehaviour
     private int maxLevel;
 
     [Header("Level End Settings")]
-    private bool isLevelEnding = false;
-    private float levelEndDelay = 5f;
-
+    private float levelEndDelay = 0f;
     private Coroutine holdHintCoroutine;
     private float holdHintDelay = 5f;
 
@@ -99,10 +98,10 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     private void InitUI()
     {
-        isStarted = false;
+        SetState(GameState.Idle);
 
         txtPressToStart.gameObject.SetActive(true);
-        txtHoldToSendBalls.gameObject.SetActive(false);
+        HoldToSendBallsObj.SetActive(false);
 
         txtResetTimer.text = "--:--";
         txtBallCount.text = "Balls: 0";
@@ -115,37 +114,45 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     private void HandleTapStart()
     {
-        if (!isStarted)
+        if (currentState == GameState.Idle)
         {
-            isStarted = true;
+            SetState(GameState.Playing);
+
             txtPressToStart.gameObject.SetActive(false);
-            txtHoldToSendBalls.gameObject.SetActive(true);
+            StartHoldHintTimer();
         }
-        else
+        else if (currentState == GameState.Playing)
         {
-            txtHoldToSendBalls.gameObject.SetActive(false);
+            HoldToSendBallsObj.SetActive(false);
             StopHoldHintTimer();
         }
     }
 
+
+
     private void HandleHoldStart()
     {
-        txtHoldToSendBalls.gameObject.SetActive(false);
+        if (currentState != GameState.Playing)
+            return;
+
+        HoldToSendBallsObj.SetActive(false);
         StopHoldHintTimer();
     }
-
     private void HandleHoldEnd()
     {
+        if (currentState != GameState.Playing)
+            return;
+
         if (currentBallCount <= 0)
         {
-            txtHoldToSendBalls.gameObject.SetActive(false);
+            HoldToSendBallsObj.SetActive(false);
             StopHoldHintTimer();
             return;
         }
 
-        txtHoldToSendBalls.gameObject.SetActive(false);
         StartHoldHintTimer();
     }
+
 
     // -------------------------------------------------------------
     // WALLET / SCORE
@@ -186,15 +193,16 @@ public class GameManager : MonoBehaviour
         roundScore += amount;
         txtScore.text = "Score: " + roundScore;
 
-        // 🔥 NEW LEVEL RULE
         ballsScoredThisLevel++;
 
-        if (ballsScoredThisLevel >= ballsRequiredForLevel && !isLevelEnding)
+        if (ballsScoredThisLevel >= ballsRequiredForLevel &&
+            currentState == GameState.Playing)
         {
             StopHoldHintTimer();
             StartCoroutine(LevelEndRoutine());
         }
     }
+
 
     // -------------------------------------------------------------
     // BALL COUNT (LEVEL END REMOVED FROM HERE)
@@ -211,12 +219,11 @@ public class GameManager : MonoBehaviour
     private void StartHoldHintTimer()
     {
         StopHoldHintTimer();
-
-        if (currentBallCount <= 0 || !isStarted)
+        if (currentBallCount <= 0 || currentState != GameState.Playing)
             return;
-
         holdHintCoroutine = StartCoroutine(HoldHintRoutine());
     }
+
 
     private void StopHoldHintTimer()
     {
@@ -231,9 +238,10 @@ public class GameManager : MonoBehaviour
     {
         yield return new WaitForSeconds(holdHintDelay);
 
-        if (currentBallCount > 0 && isStarted)
-            txtHoldToSendBalls.gameObject.SetActive(true);
+        if (currentBallCount > 0 && currentState == GameState.Playing)
+            HoldToSendBallsObj.SetActive(true);
     }
+
 
     // -------------------------------------------------------------
     // LEVEL LOAD
@@ -274,18 +282,19 @@ public class GameManager : MonoBehaviour
 
     private void HandleLevelStarted(int level)
     {
+        SetState(GameState.Idle);
+
         txtLevel.text = "Level: " + level;
-        txtPressToStart.gameObject.SetActive(true);
-        txtHoldToSendBalls.gameObject.SetActive(false);
-        isStarted = false;
+        HoldToSendBallsObj.SetActive(false);
     }
+
 
     // -------------------------------------------------------------
     // LEVEL END
     // -------------------------------------------------------------
     private IEnumerator LevelEndRoutine()
     {
-        isLevelEnding = true;
+        SetState(GameState.LevelEnd);
 
         yield return new WaitForSeconds(levelEndDelay);
 
@@ -305,12 +314,10 @@ public class GameManager : MonoBehaviour
 
         LoadLevelData(currentLevel);
 
-        txtPressToStart.gameObject.SetActive(true);
-        txtHoldToSendBalls.gameObject.SetActive(false);
-
-        isStarted = false;
-        isLevelEnding = false;
+        HoldToSendBallsObj.SetActive(false);
+        currentState = GameState.Idle;
     }
+
 
     private void SaveEndOfGameData()
     {
@@ -330,6 +337,11 @@ public class GameManager : MonoBehaviour
     // -------------------------------------------------------------
     private async void HandleGameReset()
     {
+        SetState(GameState.Reset);
+
+        txtPressToStart.gameObject.SetActive(true);
+        HoldToSendBallsObj.SetActive(false);
+
         int earnedThisSession = roundScore;
         roundScore = 0;
         txtScore.text = "Score: 0";
@@ -343,19 +355,18 @@ public class GameManager : MonoBehaviour
             RewardValidator.Instance.SyncWalletFromServer(wallet);
         }
 
-        PlayerSessionData session = new PlayerSessionData()
+        PlayerDataManager.Instance.AddSession(new PlayerSessionData
         {
             date = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             levelId = currentLevel,
             ballUsed = 0,
             moneyEarned = earnedThisSession
-        };
-
-        PlayerDataManager.Instance.AddSession(session);
+        });
 
         currentLevel = 1;
         LoadLevelData(currentLevel);
     }
+
 
     // -------------------------------------------------------------
     // TIMER
@@ -389,5 +400,18 @@ public class GameManager : MonoBehaviour
         }
 
         txtResetTimer.text = $"{diff.Minutes:00}:{diff.Seconds:00}";
+    }
+
+    // -------------------------------------------------------------
+    // State
+    // -------------------------------------------------------------
+
+    private void SetState(GameState newState)
+    {
+        if (currentState == newState)
+            return;
+
+        currentState = newState;
+        GameEvents.TriggerGameStateChanged(currentState);
     }
 }

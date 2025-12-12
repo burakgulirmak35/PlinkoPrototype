@@ -58,5 +58,14 @@ namespace PlinkoPrototype
             => OnLevelStarted?.Invoke(level);
         #endregion
 
+        #region GameState
+        public static Action<GameState> OnGameStateChanged;
+
+        public static void TriggerGameStateChanged(GameState state)
+        {
+            OnGameStateChanged?.Invoke(state);
+        }
+        #endregion
+
     }
 }

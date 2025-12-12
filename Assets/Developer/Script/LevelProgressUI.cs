@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +9,7 @@ namespace PlinkoPrototype
     {
         [SerializeField] private Slider progressSlider;
         [SerializeField] private TextMeshProUGUI txtProgress;
+        [SerializeField] private GameObject fxLevelUp;
 
         private int ballsScored = 0;
         private int ballsRequired = 1;
@@ -16,12 +18,14 @@ namespace PlinkoPrototype
         {
             GameEvents.OnLevelStarted += HandleLevelStarted;
             GameEvents.OnBallScored += HandleBallScored;
+            GameEvents.OnLevelCompleted += HandleLevelCompleted;
         }
 
         private void OnDisable()
         {
             GameEvents.OnLevelStarted -= HandleLevelStarted;
             GameEvents.OnBallScored -= HandleBallScored;
+            GameEvents.OnLevelCompleted -= HandleLevelCompleted;
         }
 
         private void HandleLevelStarted(int level)
@@ -38,11 +42,23 @@ namespace PlinkoPrototype
             UpdateUI();
         }
 
+        private void HandleLevelCompleted()
+        {
+            StartCoroutine(ShowLevelUpEffect());
+        }
+
+        private IEnumerator ShowLevelUpEffect()
+        {
+            fxLevelUp.SetActive(true);
+            yield return new WaitForSeconds(2f);
+            fxLevelUp.SetActive(false);
+        }
+
         private void UpdateUI()
         {
-            float progress = (float)ballsScored / ballsRequired;
-            progressSlider.value = Mathf.Clamp01(progress);
-
+            if (ballsScored > ballsRequired) ballsScored = ballsRequired;
+            float progress = (float)ballsScored / (float)ballsRequired;
+            progressSlider.value = progress;
             txtProgress.text = $"{ballsScored} / {ballsRequired}";
         }
     }

@@ -59,6 +59,7 @@ namespace PlinkoPrototype
             GameEvents.OnHoldEnd += StopSpawning;
             GameEvents.OnLevelChanged += UpdateSpawnAreaFromLevel;
             GameEvents.OnGameReset += HandleGameReset;
+            GameEvents.OnGameStateChanged += HandleGameStateChanged;
         }
 
         private void OnDisable()
@@ -67,6 +68,7 @@ namespace PlinkoPrototype
             GameEvents.OnHoldEnd -= StopSpawning;
             GameEvents.OnLevelChanged -= UpdateSpawnAreaFromLevel;
             GameEvents.OnGameReset -= HandleGameReset;
+            GameEvents.OnGameStateChanged -= HandleGameStateChanged;
         }
 
         // ------------------------------------------------
@@ -129,9 +131,13 @@ namespace PlinkoPrototype
         // ------------------------------------------------
         private void StartSpawning()
         {
+            if (currentState != GameState.Playing)
+                return;
+
             if (spawnRoutine == null && availableBalls > 0)
                 spawnRoutine = StartCoroutine(SpawnRoutine());
         }
+
 
         private void StopSpawning()
         {
@@ -203,7 +209,7 @@ namespace PlinkoPrototype
         // FAKE BALL
         // ------------------------------------------------
         private Tween fakeBallTween;
-        private float fakeBallDuration = 2f;
+        private float fakeBallDuration = 5f;
 
         private bool isLoopingFakeBall = false;
         private void StartFakeBall()
@@ -234,6 +240,18 @@ namespace PlinkoPrototype
 
             isLoopingFakeBall = false;
             fakeBall.gameObject.SetActive(false);
+        }
+
+        // -------------------------------------------------------------
+        // State
+        // -------------------------------------------------------------
+        private GameState currentState;
+        private void HandleGameStateChanged(GameState state)
+        {
+            currentState = state;
+
+            if (currentState != GameState.Playing)
+                StopSpawning();
         }
     }
 }

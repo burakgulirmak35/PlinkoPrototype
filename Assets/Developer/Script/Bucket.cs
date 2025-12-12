@@ -43,21 +43,15 @@ namespace PlinkoPrototype
 
         public void SetWidth(float width = 1)
         {
-            if (bucketSprite != null)
-                bucketSprite.size = new Vector2(width, 1);
-
-            if (leftEdge != null)
-                leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.localPosition.y, 0f);
-
-            if (rightEdge != null)
-                rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.localPosition.y, 0f);
+            bucketSprite.transform.localScale = new Vector2(width, 1);
+            leftEdge.localPosition = new Vector3(-width * 0.5f, leftEdge.localPosition.y, 0f);
+            rightEdge.localPosition = new Vector3(width * 0.5f, rightEdge.localPosition.y, 0f);
         }
 
         public void SetScore(int score)
         {
             bucketScore = score;
-            if (textScore != null)
-                textScore.text = score.ToString();
+            textScore.text = "x" + bucketScore;
         }
 
         public void SetColor(string hex)
