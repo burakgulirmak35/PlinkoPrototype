@@ -205,7 +205,9 @@ Gerçek mobil oyun mimarilerini simüle eder
 Performans, güvenlik ve ölçeklenebilirliği önceliklendirir
 
 🛠 Level Creator (Unity Editor Tool)
-<img width="484" height="776" alt="image" src="https://github.com/user-attachments/assets/85120b6d-2c48-4b08-b151-633b40893645" />
+...
+<img width="489" height="475" alt="image" src="https://github.com/user-attachments/assets/65f10ea7-849b-49d2-b5e9-116b66cb526c" />
+
 
 Bu projede, level içeriklerinin koddan bağımsız olarak üretilebilmesi için özel bir Unity Editor aracı (Level Creator) geliştirilmiştir.
 
