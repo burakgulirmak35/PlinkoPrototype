@@ -57,11 +57,7 @@ Bu sayede:
 | MockServerService | Backend simülasyonu |
 
 ---
-
-## Ödül Doğrulama Stratejisi  
-*(Case’in En Kritik Kısmı)*
-
-### Problem (Case’te Tanımlanan)
+### Problem
 
 - Client tarafında hesaplanan ödül **güvenilmez**
 - Her top için server isteği atmak **performanssız**
